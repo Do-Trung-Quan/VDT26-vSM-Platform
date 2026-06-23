@@ -1,0 +1,131 @@
+@startuml Scenario2_UploadAudioMeeting
+
+skinparam SequenceMessageAlign center
+skinparam maxMessageSize 180
+skinparam ParticipantPadding 14
+skinparam BoxPadding 8
+
+autonumber "<b>0)"
+
+actor "User" as User
+
+box "Client Layer" #E8F4FD
+boundary "Meeting List UI" as MeetingListUI
+end box
+
+box "Presentation Layer" #FDF1E3
+control "Meeting\nController" as MeetingCtrl
+control "WS Gateway" as WSGateway
+end box
+
+box "Application Layer" #E8F8E8
+participant "Meeting\nService" as MeetingSvc
+participant "Transcription\nService" as TransSvc
+participant "Transcription\nWorker" as Worker
+end box
+
+box "Domain Layer" #F3E8FD
+entity "Meeting\nEntity" as MeetingEntity
+entity "TranscriptBlock\nEntity" as BlockEntity
+end box
+
+box "Infrastructure Layer" #FDEAEA
+database "Meeting\nRepository" as MeetingRepo
+database "Transcript\nRepository" as TransRepo
+participant "Object Storage\nAdapter" as StorageAdapter
+participant "VAD\nAdapter" as VADAdapter
+participant "Speech2Text\nAdapter" as STTAdapter
+participant "SpeakerIdentify\nAdapter" as SpeakerAdapter
+collections "Job Queue\n(BullMQ)" as JobQueue
+queue "EventBus\n(BullMQ)" as EventBus
+end box
+
+database "Redis" as Redis
+database "PostgreSQL" as DB
+database "MinIO / S3" as MinIO
+participant "AI Service" as AIService #FFF2CC
+
+== Phase A: Upload File & Khởi tạo phiên họp (REST/HTTP) ==
+
+User -> MeetingListUI : Chọn "Tải file Audio cuộc họp"
+MeetingListUI -> User : Mở form nhập thông tin cuộc họp và tải lên file audio
+User -> MeetingListUI : Điền thông tin, đính kèm file & bấm "Tạo"
+MeetingListUI -> MeetingCtrl : POST /api/meetings/upload (Multipart Form-data)
+MeetingCtrl -> MeetingCtrl : Xác thực JWT Token & bóc tách user_id
+MeetingCtrl -> MeetingSvc : createMeetingFromAudio(user_id, CreateMeetingDTO, audio_file_buffer)
+MeetingSvc -> StorageAdapter : Upload trực tiếp buffer lên Object Storage
+StorageAdapter -> MinIO : Upload object lên Object Storage
+MinIO -> StorageAdapter : Trả về đường dẫn lưu trữ vĩnh viễn (audio_url)
+StorageAdapter -> MeetingSvc : Trả về audio_url
+MeetingSvc -> MeetingEntity : MeetingEntity.createFromAudioUpload(user_id, dto, audio_url)
+MeetingEntity -> MeetingEntity : Tự kiểm duyệt quy tắc nghiệp vụ & tự gán status = PROCESSING (Self-validate)
+MeetingEntity -> MeetingSvc : Trả về Validated MeetingEntity
+MeetingSvc -> MeetingRepo : save(MeetingEntity)
+MeetingRepo -> DB : INSERT INTO meetings (status = 'PROCESSING', audio_url)
+DB -> MeetingRepo : Trả về bản ghi đã tạo (kèm meeting_id định danh)
+MeetingRepo -> MeetingSvc : Trả về Saved MeetingEntity
+MeetingSvc -> EventBus : Publish Domain Event (AudioMeetingCreatedEvent{meeting_id, audio_url})
+MeetingSvc -> MeetingCtrl : Trả về MeetingResponseDTO
+MeetingCtrl -> MeetingListUI : Phản hồi mã HTTP 202 Accepted
+MeetingListUI -> User : Hiển thị thông báo tải lên thành công & cuộc họp với trạng thái PROCESSING
+
+== Phase B: Đưa job vào hàng đợi xử lý (Job Queueing) ==
+
+EventBus -> TransSvc : Bắt sự kiện AudioMeetingCreatedEvent{meeting_id, audio_url}
+TransSvc -> JobQueue : enqueue(TranscriptionJob{meeting_id, audio_url})
+JobQueue -> Redis : Lưu job vào hàng đợi (persist job data)
+Redis -> JobQueue : Xác nhận đã lưu job thành công
+JobQueue -> TransSvc : Trả về job_id đã đăng ký
+
+== Phase C: Worker xử lý bóc băng theo concurrency giới hạn (Background Worker Processing) ==
+
+JobQueue -> Worker : Phân phát job khi đến lượt (concurrency limit, vd tối đa 10 job song song)
+Worker -> VADAdapter : Quét toàn bộ file audio (audio_url) để phân đoạn theo khoảng lặng
+VADAdapter -> Worker : Trả về danh sách N đoạn audio (kèm start_time/end_time mỗi đoạn)
+
+loop tuần tự qua từng đoạn trong danh sách N đoạn
+
+  par Gọi song song 2 API AI cho cùng 1 đoạn
+
+    Worker -> STTAdapter : Speech2Text(đoạn audio)
+    STTAdapter -> AIService : Gửi đoạn audio (wav) để chuyển đổi văn bản
+    AIService -> STTAdapter : Trả về text
+    STTAdapter -> Worker : Trả về text đã chuẩn hóa
+
+  else
+
+    Worker -> SpeakerAdapter : SpeakerIdentify(đoạn audio)
+    SpeakerAdapter -> AIService : Gửi đoạn audio để nhận diện người nói
+    AIService -> SpeakerAdapter : Trả về speaker_id
+    SpeakerAdapter -> Worker : Trả về speaker_id
+
+  end
+
+  Worker -> BlockEntity : TranscriptBlockEntity.create(text, speaker_id, start_time, end_time)
+  BlockEntity -> BlockEntity : Tự kiểm duyệt tính hợp lệ (Self-validate)
+  BlockEntity -> Worker : Trả về thực thể khối văn bản hợp lệ
+
+end
+
+Worker -> TransRepo : bulkSave(TranscriptBlockEntity[])
+TransRepo -> DB : Thực thi lệnh INSERT INTO transcripts (lưu toàn bộ biên bản)
+DB -> TransRepo : Xác nhận lưu trữ cơ sở dữ liệu thành công
+Worker -> JobQueue : markJobCompleted(job_id)
+Worker -> EventBus : Publish Domain Event (OfflineTranscriptionCompletedEvent{meeting_id})
+
+EventBus -> MeetingSvc : Nhận sự kiện OfflineTranscriptionCompletedEvent{meeting_id}
+MeetingSvc -> MeetingRepo : findById(meeting_id)
+MeetingRepo -> MeetingSvc : Trả về MeetingEntity hiện tại
+MeetingSvc -> MeetingEntity : Cập nhật trạng thái (status = COMPLETED)
+MeetingEntity -> MeetingSvc : Trả về thực thể đã cập nhật hợp lệ
+MeetingSvc -> MeetingRepo : update(MeetingEntity)
+MeetingRepo -> DB : Thực thi lệnh UPDATE meetings SET status = 'COMPLETED'
+DB -> MeetingRepo : Xác nhận cập nhật thành công
+MeetingRepo -> MeetingSvc : Trả về kết quả cập nhật
+MeetingSvc -> EventBus : Publish Domain Event (MeetingStatusUpdatedEvent{meeting_id, status})
+
+EventBus -> WSGateway : Nhận sự kiện MeetingStatusUpdatedEvent để xử lý thông báo
+WSGateway -> MeetingListUI : emit(meeting_processing_completed, meeting_id)
+MeetingListUI -> User : Giao diện chuyển trạng thái cuộc họp thành COMPLETED
+
+@enduml

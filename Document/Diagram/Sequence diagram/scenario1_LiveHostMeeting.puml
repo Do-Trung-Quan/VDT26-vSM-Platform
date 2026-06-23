@@ -1,0 +1,142 @@
+@startuml Scenario1_LiveMeeting
+
+skinparam SequenceMessageAlign center
+skinparam maxMessageSize 180
+skinparam ParticipantPadding 18
+skinparam BoxPadding 8
+
+autonumber "<b>0)"
+
+actor "User" as User
+
+box "Client Layer" #E8F4FD
+boundary "Meeting List UI" as MeetingListUI
+boundary "Live Workspace UI" as LiveUI
+end box
+
+box "Presentation Layer" #FDF1E3
+control "Meeting\nController" as MeetingCtrl
+control "WS Gateway" as WSGateway
+end box
+
+box "Application Layer" #E8F8E8
+participant "Meeting\nService" as MeetingSvc
+participant "Transcription\nService" as TransSvc
+end box
+
+box "Domain Layer" #F3E8FD
+entity "Meeting\nEntity" as MeetingEntity
+entity "TranscriptBlock\nEntity" as BlockEntity
+end box
+
+box "Infrastructure Layer" #FDEAEA
+database "Meeting\nRepository" as MeetingRepo
+database "Transcript\nRepository" as TransRepo
+collections "Local File\nStorage" as FileStorage
+collections "Redis Cache" as Redis
+participant "AI Service\nAdapter" as AIAdapter
+queue "EventBus" as EventBus
+end box
+
+database "PostgreSQL" as DB
+
+cloud "AI Service" as AIService #FFF2CC
+
+== Phase A: Khởi tạo phiên họp trực tuyến (REST/HTTP) ==
+
+User -> MeetingListUI : Điền thông tin cuộc họp & chọn "Tạo cuộc họp"
+MeetingListUI -> MeetingCtrl : POST /api/meetings (CreateMeetingDTO)
+MeetingCtrl -> MeetingCtrl : Xác thực JWT Token & bóc tách user_id
+MeetingCtrl -> MeetingSvc : createMeeting(user_id, CreateMeetingDTO)
+MeetingSvc -> MeetingEntity : MeetingEntity.create()
+MeetingEntity -> MeetingEntity : Tự kiểm duyệt quy tắc nghiệp vụ (Self-validate)
+MeetingEntity -> MeetingSvc : Trả về instance hợp lệ (chứa MeetingCreatedEvent)
+MeetingSvc -> MeetingRepo : save(MeetingEntity)
+MeetingRepo -> DB : INSERT INTO meetings (status = SCHEDULED)
+DB -> MeetingRepo : Trả về bản ghi đã tạo
+MeetingRepo -> MeetingSvc : Trả về MeetingEntity đã lưu
+MeetingSvc -> EventBus : Publish Domain Event (MeetingCreatedEvent)
+MeetingSvc -> MeetingCtrl : Trả về MeetingResponseDTO
+MeetingCtrl -> MeetingListUI : 201 Created
+MeetingListUI -> LiveUI : Điều hướng sang phòng họp Live
+
+== Phase B: Khởi tạo luồng ghi âm & kết nối AI (WebSocket) ==
+
+User -> LiveUI : Cấp quyền Micro & bấm "Bắt đầu ghi âm"
+LiveUI -> WSGateway : Mở kết nối WebSocket (meeting_id & JWT token)
+WSGateway -> WSGateway : Xác thực JWT Token & phân giải user_id
+WSGateway -> TransSvc : startLiveSession(meeting_id)
+TransSvc -> MeetingRepo : Truy vấn kiểm tra tính hợp lệ của phiên họp
+MeetingRepo -> TransSvc : Trả về dữ liệu MeetingEntity hiện tại
+TransSvc -> FileStorage : Khởi tạo luồng ghi tệp âm thanh vật lý (createWriteStream)
+TransSvc -> Redis : Cấp phát bộ đệm tạm thời cho phiên họp
+TransSvc -> AIAdapter : Yêu cầu thiết lập kết nối nhận diện giọng nói
+AIAdapter -> AIService : Thiết lập kết nối streaming (gRPC/WebSocket)
+TransSvc -> WSGateway : Phản hồi trạng thái Session Ready
+WSGateway -> LiveUI : Xác nhận kết nối thành công, yêu cầu gửi audio
+LiveUI -> User : Hiển thị trạng thái "Đang ghi âm trực tiếp"
+
+== Phase C: Vòng lặp truyền phát & xử lý bóc băng (Streaming Loop) ==
+
+loop mỗi khi UI cắt được một chunk âm thanh mới
+
+  LiveUI -> WSGateway : Gửi gói dữ liệu âm thanh nhị phân (audio chunk)
+  WSGateway -> TransSvc : Chuyển tiếp gói dữ liệu âm thanh
+  TransSvc -> FileStorage : Ghi nối tiếp (append) gói âm thanh vào tệp vật lý
+  TransSvc -> AIAdapter : Gửi gói âm thanh để xử lý
+  AIAdapter -> AIService : Chuyển tiếp luồng âm thanh ra hệ thống bên ngoài
+  AIService -> AIAdapter : Trả về kết quả văn bản thô kèm cờ trạng thái (is_final)
+  AIAdapter -> TransSvc : Phân tích & trả về đối tượng dữ liệu văn bản đã chuẩn hóa
+  TransSvc -> TransSvc : Phân loại luồng xử lý dựa trên cờ is_final
+
+  alt is_final = false (văn bản đang được AI cập nhật)
+
+    TransSvc -> WSGateway : Gửi sự kiện cập nhật văn bản nháp (Draft Text)
+    WSGateway -> LiveUI : Render văn bản màu xám (hoặc nhấp nháy)
+
+  else is_final = true (AI đã chốt xong 1 câu)
+
+    TransSvc -> BlockEntity : TranscriptBlockEntity.create()
+    BlockEntity -> BlockEntity : Tự kiểm duyệt tính hợp lệ của khối văn bản (Self-validate)
+    BlockEntity -> TransSvc : Trả về thực thể khối văn bản hợp lệ
+    TransSvc -> Redis : Lưu trữ đệm thực thể này vào RAM (phục vụ gom nhóm)
+    TransSvc -> WSGateway : Gửi sự kiện cập nhật văn bản chính thức (Final Text)
+    WSGateway -> LiveUI : Render văn bản màu đen và hiển thị xuống dòng mới
+
+  end
+
+end
+
+== Phase D: Kết thúc phiên & lưu trữ toàn vẹn (Finalize) ==
+
+User -> LiveUI : Chọn "Kết thúc cuộc họp"
+LiveUI -> WSGateway : Gửi tín hiệu đóng phiên họp (end_session)
+WSGateway -> TransSvc : Yêu cầu chốt dữ liệu phiên họp (finalizeSession)
+TransSvc -> FileStorage : Đóng luồng ghi tệp âm thanh (closeWriteStream)
+FileStorage -> TransSvc : Trả về đường dẫn vật lý của tệp âm thanh (audio_url)
+TransSvc -> AIAdapter : Yêu cầu ngắt kết nối
+AIAdapter -> AIService : Đóng luồng streaming đang chạy
+TransSvc -> Redis : Truy xuất toàn bộ khối văn bản đã chốt trong bộ đệm
+Redis -> TransSvc : Trả về mảng dữ liệu TranscriptBlockEntity
+TransSvc -> TransRepo : Giao mảng thực thể để lưu trữ hàng loạt (bulkSave)
+TransRepo -> DB : INSERT INTO transcripts (lưu toàn bộ biên bản)
+DB -> TransRepo : Xác nhận lưu trữ cơ sở dữ liệu thành công
+TransSvc -> EventBus : Publish Domain Event (LiveSessionEndedEvent kèm audio_url)
+
+note right of EventBus
+  Nhánh phụ: xử lý sự kiện
+  cập nhật trạng thái cuộc họp
+end note
+
+EventBus -> MeetingSvc : Nhận sự kiện LiveSessionEndedEvent để xử lý
+MeetingSvc -> MeetingEntity : Cập nhật trạng thái (status = COMPLETED) và gán audio_url
+MeetingSvc -> MeetingRepo : Lưu lại thực thể cuộc họp đã cập nhật
+MeetingRepo -> DB : UPDATE meetings (cập nhật status và audio_url)
+
+TransSvc -> Redis : Dọn dẹp và giải phóng bộ đệm của phiên họp
+TransSvc -> WSGateway : Trả về tín hiệu hoàn tất lưu trữ
+WSGateway -> LiveUI : Đóng kết nối WebSocket thành công
+LiveUI -> MeetingListUI : Điều hướng về màn hình danh sách
+MeetingListUI -> User : Hiển thị danh sách cuộc họp cập nhật & trạng thái hoàn tất
+
+@enduml

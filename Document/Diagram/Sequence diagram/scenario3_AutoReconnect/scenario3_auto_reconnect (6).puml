@@ -1,0 +1,156 @@
+@startuml Scenario3_AutoReconnect
+
+skinparam SequenceMessageAlign center
+skinparam maxMessageSize 180
+skinparam ParticipantPadding 16
+skinparam BoxPadding 8
+
+autonumber "<b>0)"
+
+actor "User" as User
+
+box "Client Layer" #E8F4FD
+boundary "Live Workspace UI" as LiveUI
+end box
+
+box "Presentation Layer" #FDF1E3
+control "WS Gateway" as WSGateway
+end box
+
+box "Application Layer" #E8F8E8
+control "Transcription\nService" as TransSvc
+end box
+
+box "Domain Layer" #F3E8FD
+entity "TranscriptBlock\nEntity" as BlockEntity
+end box
+
+box "Infrastructure Layer" #FDEAEA
+database "Meeting\nRepository" as MeetingRepo
+collections "Local File\nStorage" as FileStorage
+participant "VAD\nAdapter" as VADAdapter
+participant "Speech2Text\nAdapter" as STTAdapter
+participant "SpeakerIdentify\nAdapter" as SpeakerAdapter
+queue "EventBus\n(BullMQ)" as EventBus
+end box
+
+database "Redis" as Redis
+participant "AI Service" as AIService #FFF2CC
+
+note over LiveUI, AIService #E8F8E8
+  **Liên kết với Sequence Diagram 1:** Tiền điều kiện của luồng này
+  là phiên Live đang chạy bình thường theo **Phase C - Scenario 1**.
+  Luồng dưới đây bắt đầu khi WebSocket bất ngờ bị gián đoạn.
+end note
+
+== Phase A: Phát hiện mất kết nối, đặt thời hạn chờ resume ==
+
+par Client và Server độc lập tự phát hiện kết nối bị đứt
+
+  LiveUI -> LiveUI : Phát hiện WebSocket bị đóng/lỗi
+  LiveUI -> User : Hiển thị banner "Mất kết nối, đang thử kết nối lại..."
+  LiveUI -> LiveUI : Vẫn ghi âm liên tục, đẩy audio thô vào buffer tạm cục bộ
+
+else
+
+  WSGateway -> WSGateway : Phát hiện client disconnect (handleDisconnect)
+  WSGateway -> TransSvc : Báo phiên (meeting_id) vừa mất kết nối
+  TransSvc -> Redis : Đặt thời hạn chờ resume cho phiên (TTL)
+
+end
+
+== Sau Phase A: hai khả năng loại trừ nhau tùy việc nào xảy ra trước ==
+
+alt Client gửi được request resume trước khi TTL hết hạn
+
+  LiveUI -> WSGateway : mở lại kết nối (meeting_id, JWT token, last_received_sequence)
+  WSGateway -> WSGateway : Xác thực JWT Token & phân giải user_id
+  WSGateway -> TransSvc : resumeSession(meeting_id, last_received_sequence)
+  TransSvc -> Redis : Hủy thời hạn chờ resume của phiên (TTL)
+  TransSvc -> MeetingRepo : Kiểm tra trạng thái cuộc họp
+  MeetingRepo -> TransSvc : Xác nhận cuộc họp hợp lệ (ACTIVE)
+  TransSvc -> Redis : Truy xuất các TranscriptBlock có sequence > last_received_sequence
+  Redis -> TransSvc : Trả về mảng missed_blocks (có thể rỗng)
+  TransSvc -> VADAdapter : Kiểm tra trạng thái VAD instance của phiên này
+
+  alt VAD instance vẫn còn tồn tại
+
+    VADAdapter -> TransSvc : Xác nhận VAD instance vẫn còn (đang giữ phần audio nghe dở, nếu có)
+
+  else VAD instance đã bị dọn dẹp/mất (Backend từng restart)
+
+    VADAdapter -> VADAdapter : Khởi tạo lại VAD instance mới cho phiên (rỗng, không còn audio nghe dở cũ)
+    VADAdapter -> TransSvc : Xác nhận VAD instance mới đã sẵn sàng
+
+  end
+
+  TransSvc -> WSGateway : Phản hồi resume thành công kèm missed_blocks
+  WSGateway -> LiveUI : Trả kết nối thành công, kèm missed_blocks
+  LiveUI -> User : Render ngay các block bị kẹt, đổi banner thành "Đang đồng bộ dữ liệu..."
+
+  == Phase B: Gửi audio tồn đọng & mới, xử lý VAD + STT (1 luồng duy nhất) ==
+
+  loop cho tới khi buffer audio tồn đọng của Client rỗng
+
+    LiveUI -> WSGateway : Gửi audio thô từ buffer tồn đọng (streaming liên tục)
+    WSGateway -> TransSvc : Chuyển tiếp dữ liệu âm thanh
+    TransSvc -> FileStorage : Ghi nối tiếp vào file audio tạm
+    TransSvc -> VADAdapter : Đưa audio vào luồng phân tích khoảng lặng
+
+    alt VAD phát hiện khoảng lặng (đã đủ 1 block hoàn chỉnh)
+
+      VADAdapter -> TransSvc : Trả về 1 đoạn audio hoàn chỉnh (kèm start_time/end_time)
+
+      par Gọi song song 2 API AI cho cùng 1 đoạn
+
+        TransSvc -> STTAdapter : Speech2Text(đoạn audio)
+        STTAdapter -> AIService : Gửi đoạn audio (wav) để chuyển đổi văn bản
+        AIService -> STTAdapter : Trả về text
+        STTAdapter -> TransSvc : Trả về text đã chuẩn hóa
+
+      else
+
+        TransSvc -> SpeakerAdapter : SpeakerIdentify(đoạn audio)
+        SpeakerAdapter -> AIService : Gửi đoạn audio để nhận diện người nói
+        AIService -> SpeakerAdapter : Trả về speaker_id
+        SpeakerAdapter -> TransSvc : Trả về speaker_id
+
+      end
+
+      TransSvc -> BlockEntity : TranscriptBlockEntity.create(text, speaker_id, start_time, end_time) (tự tăng sequence)
+      BlockEntity -> TransSvc : Trả về thực thể hợp lệ
+      TransSvc -> Redis : Lưu đệm thực thể vào buffer
+      TransSvc -> WSGateway : emit(transcript_update, block)
+      WSGateway -> LiveUI : Nhận block text mới
+
+    end
+
+    LiveUI -> LiveUI : Giảm dung lượng audio tồn đọng trong buffer cục bộ; nếu về 0 thì đánh dấu đã đồng bộ xong
+    LiveUI -> User : Render text bình thường (nếu có block mới); ẩn banner nếu đã đồng bộ xong
+
+  end
+
+  note over LiveUI, AIService #E8F8E8
+    **Liên kết với Sequence Diagram 1:** Khi buffer cục bộ đã rỗng,
+    hệ thống coi như đã đồng bộ xong và quay lại đúng **Phase C -
+    Scenario 1** (luồng gửi audio liên tục & xử lý VAD + STT bình
+    thường). Không có bước kỹ thuật nào khác biệt thêm.
+  end note
+
+else TTL hết hạn trước khi Client gửi được request resume
+
+  TransSvc -> TransSvc : Redis TTL hết hạn, không thấy Client resume trong thời gian cho phép
+  TransSvc -> EventBus : Tự động kích hoạt finalizeSession & publish LiveSessionEndedEvent
+
+  note over TransSvc, EventBus #FDEAEA
+    **Liên kết với Sequence Diagram 1:** Từ đây, luồng xử lý tiếp
+    diễn giống chính xác **Phase D - Scenario 1** (Kết thúc phiên &
+    lưu trữ toàn vẹn) — đóng file audio tạm, upload Object Storage,
+    bulkSave transcript, publish event cập nhật Meeting status =
+    COMPLETED — chỉ khác nguyên nhân kích hoạt là do timeout tự
+    động, thay vì User chủ động bấm "Kết thúc cuộc họp".
+  end note
+
+end
+
+@enduml

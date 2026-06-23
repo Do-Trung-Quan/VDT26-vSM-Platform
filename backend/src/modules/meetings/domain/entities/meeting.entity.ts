@@ -1,0 +1,1 @@
+// @Entity('meetings') + Aggregate Root: đầy đủ cột (FK host_id/department_id, deleted_at); method startLive(), markProcessing(), complete(audioUrl,duration), lock()/unlock(), softDelete(); gom domain event

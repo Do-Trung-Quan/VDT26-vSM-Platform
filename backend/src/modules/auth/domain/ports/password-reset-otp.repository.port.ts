@@ -1,0 +1,1 @@
+// IPasswordResetOtpRepository: save, findActiveByUser, markUsed

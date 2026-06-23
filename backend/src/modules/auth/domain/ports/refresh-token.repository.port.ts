@@ -1,0 +1,1 @@
+// IRefreshTokenRepository: save, findByHash, revokeAllByUser
