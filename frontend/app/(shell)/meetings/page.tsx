@@ -119,7 +119,7 @@ export default function MeetingsPage() {
       {/* Table */}
       <div className="bg-white border border-line rounded-[10px] overflow-hidden">
         {/* Header row */}
-        <div className="grid gap-3 px-[18px] py-3.5 border-b border-line text-[11px] font-semibold text-tx-muted uppercase tracking-[.4px]"
+        <div className="grid gap-3 px-[18px] py-3.5 border-b border-line bg-surface/60 text-[12px] font-bold text-tx-dark uppercase tracking-wide"
           style={{ gridTemplateColumns: "1fr 116px 96px 160px 160px 130px 44px" }}>
           <div>Cuộc họp</div><div>Trạng thái</div><div>Loại</div>
           <div>Host</div><div>Phòng ban</div><div>Thời gian tạo</div><div />

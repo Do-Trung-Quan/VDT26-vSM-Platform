@@ -1,42 +1,41 @@
 "use client";
 import { useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Role } from "@/lib/types";
+import { getInitials, getAvatarColor } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
+import { useRouter } from "next/navigation";
 
 const NOTIFICATIONS = [
-  { id:"n1", message:'Cuộc họp "Họp giao ban kỹ thuật tuần 25" vừa được tạo trong phòng ban.', time:"5 phút trước", read:false },
-  { id:"n2", message:'Cuộc họp "Review sprint 14" đã chuyển sang trạng thái PROCESSING.',      time:"1 giờ trước",  read:false },
-  { id:"n3", message:'Admin đã cập nhật thông tin cuộc họp "Chốt phương án ngân sách Q3".',   time:"3 giờ trước",  read:false },
-  { id:"n4", message:'Biên bản "Kickoff dự án nâng cấp hạ tầng Cloud" đã sẵn sàng.',         time:"Hôm qua",      read:true  },
+  { id:"n1", message:'Cuộc họp "Họp giao ban kỹ thuật tuần 25" vừa được tạo.', time:"5 phút trước", read:false },
+  { id:"n2", message:'Cuộc họp "Review sprint 14" đã chuyển sang PROCESSING.',  time:"1 giờ trước",  read:false },
+  { id:"n3", message:'Admin cập nhật thông tin cuộc họp "Chốt ngân sách Q3".',  time:"3 giờ trước",  read:false },
+  { id:"n4", message:'Biên bản "Kickoff nâng cấp hạ tầng Cloud" đã sẵn sàng.', time:"Hôm qua",      read:true  },
 ];
 
-interface HeaderProps {
-  title: string;
-  role: Role;
-  onRoleChange: (r: Role) => void;
-}
-
-export function Header({ title, role, onRoleChange }: HeaderProps) {
+export function Header({ title }: { title: string }) {
+  const { user, profile, logout } = useAuth();
+  const router   = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
-  const isAdmin = role === "ADMIN";
   const unread = NOTIFICATIONS.filter(n => !n.read).length;
 
-  const seg = (active: boolean) =>
-    cn("px-3 py-1.5 rounded-[5px] text-xs font-semibold cursor-pointer transition-all select-none",
-      active ? "bg-white text-navy shadow-sm" : "text-tx-light hover:text-tx-dark");
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/login");
+  };
+
+  // Ưu tiên dùng profile (User đầy đủ, kèm avatarUrl fresh); fallback về user (AuthUser) nếu profile chưa load
+  const displayName = profile?.fullName ?? user?.fullName ?? "—";
+  const displayRole = (profile?.role ?? user?.role) === "ADMIN" ? "Quản trị viên" : "Nhân viên";
+  const avatarUrl   = profile?.avatarUrl ?? "";
+  const initials    = profile ? getInitials(profile.fullName) : (user ? getInitials(user.fullName) : "??");
+  const color       = profile ? getAvatarColor(profile.id) : (user ? getAvatarColor(user.id) : "#64748B");
 
   return (
     <header className="h-16 flex-none bg-white border-b border-line flex items-center justify-between px-7 sticky top-0 z-20">
       <div className="text-[18px] font-bold">{title}</div>
 
       <div className="flex items-center gap-4">
-        {/* Role switcher (prototype helper) */}
-        <div className="flex bg-surface border border-line rounded-[7px] p-0.5">
-          <div onClick={() => onRoleChange("USER")}  className={seg(!isAdmin)}>User</div>
-          <div onClick={() => onRoleChange("ADMIN")} className={seg(isAdmin)}>Admin</div>
-        </div>
-
         {/* Bell */}
         <div className="relative cursor-pointer" onClick={() => setNotifOpen(v => !v)}>
           <Bell size={21} className="text-tx-mid" />
@@ -47,16 +46,31 @@ export function Header({ title, role, onRoleChange }: HeaderProps) {
           )}
         </div>
 
-        {/* Avatar */}
+        {/* Avatar + tên */}
         <div className="flex items-center gap-2.5">
-          <div className="w-[34px] h-[34px] rounded-full bg-gradient-to-br from-brand to-brand-dark text-white flex items-center justify-center font-semibold text-[14px]">
-            AN
-          </div>
+          {/* Hiện ảnh nếu có avatarUrl, ngược lại hiện vòng tròn chữ cái */}
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="avatar"
+              className="w-[34px] h-[34px] rounded-full object-cover flex-none"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          ) : (
+            <div className="w-[34px] h-[34px] rounded-full text-white flex items-center justify-center font-semibold text-[14px] flex-none"
+              style={{ background: color }}>
+              {initials}
+            </div>
+          )}
           <div className="leading-tight">
-            <div className="text-[13px] font-semibold">Nguyễn Văn An</div>
-            <div className="text-[11px] text-tx-light">{isAdmin ? "Quản trị viên" : "Nhân viên"}</div>
+            <div className="text-[13px] font-semibold">{displayName}</div>
+            <div className="text-[11px] text-tx-light">{displayRole}</div>
           </div>
         </div>
+
+        {/* Logout */}
+        <button onClick={handleLogout}
+          className="w-8 h-8 rounded-[6px] flex items-center justify-center hover:bg-surface transition-colors text-tx-muted hover:text-brand"
+          title="Đăng xuất">
+          <LogOut size={16} />
+        </button>
       </div>
 
       {/* Notification dropdown */}

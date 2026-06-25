@@ -14,24 +14,25 @@ export const MEETINGS: Meeting[] = [
   { id:"m9", title:"Tổng kết doanh số khu vực miền Bắc",   status:"COMPLETED",  type:"LIVE",   host:"Hoàng Minh Tú",  dept:"Phòng Kinh doanh", created:"19/06 16:00", locked:false },
 ];
 
+// USERS & DEPARTMENTS — mock data đã được sync với backend types (Phase 2-4 dùng API thật)
 export const USERS: User[] = [
-  { id:"u1", name:"Nguyễn Văn An",  email:"nguyen.van.an@viettel.com.vn",  empId:"VT-04821", dept:"Phòng Kỹ thuật",   role:"ADMIN", active:true,  created:"12/01/2026", color:"#EE0033" },
-  { id:"u2", name:"Trần Thị Bình",  email:"tran.thi.binh@viettel.com.vn",  empId:"VT-05130", dept:"Phòng Kỹ thuật",   role:"USER",  active:true,  created:"03/02/2026", color:"#2D6CDF" },
-  { id:"u3", name:"Lê Minh Châu",   email:"le.minh.chau@viettel.com.vn",   empId:"VT-04477", dept:"Phòng Nhân sự",    role:"USER",  active:true,  created:"21/11/2025", color:"#2E9E5B" },
-  { id:"u4", name:"Phạm Quốc Dũng", email:"pham.quoc.dung@viettel.com.vn", empId:"VT-03988", dept:"Phòng Tài chính",  role:"ADMIN", active:true,  created:"08/09/2025", color:"#8B5CF6" },
-  { id:"u5", name:"Vũ Thị Hà",      email:"vu.thi.ha@viettel.com.vn",      empId:"VT-05502", dept:"Phòng CSKH",       role:"USER",  active:false, created:"14/03/2026", color:"#E8A23D" },
-  { id:"u6", name:"Đỗ Hữu Khang",   email:"do.huu.khang@viettel.com.vn",   empId:"VT-05011", dept:"Phòng Marketing",  role:"USER",  active:true,  created:"27/12/2025", color:"#0EA5A5" },
-  { id:"u7", name:"Bùi Thanh Lan",   email:"bui.thanh.lan@viettel.com.vn",  empId:"VT-04203", dept:"Phòng Pháp chế",  role:"USER",  active:true,  created:"19/06/2025", color:"#D6336C" },
-  { id:"u8", name:"Hoàng Minh Tú",   email:"hoang.minh.tu@viettel.com.vn",  empId:"VT-05399", dept:"Phòng Kinh doanh",role:"USER",  active:false, created:"02/05/2026", color:"#64748B" },
+  { id:"u1", fullName:"Nguyễn Văn An",  email:"nguyen.van.an@viettel.com.vn",  employeeId:"VT-04821", departmentId:"d1", departmentName:"Phòng Kỹ thuật",   role:"ADMIN", isActive:true,  avatarUrl:"", createdAt:"2026-01-12T00:00:00.000Z" },
+  { id:"u2", fullName:"Trần Thị Bình",  email:"tran.thi.binh@viettel.com.vn",  employeeId:"VT-05130", departmentId:"d1", departmentName:"Phòng Kỹ thuật",   role:"USER",  isActive:true,  avatarUrl:"", createdAt:"2026-02-03T00:00:00.000Z" },
+  { id:"u3", fullName:"Lê Minh Châu",   email:"le.minh.chau@viettel.com.vn",   employeeId:"VT-04477", departmentId:"d5", departmentName:"Phòng Nhân sự",    role:"USER",  isActive:true,  avatarUrl:"", createdAt:"2025-11-21T00:00:00.000Z" },
+  { id:"u4", fullName:"Phạm Quốc Dũng", email:"pham.quoc.dung@viettel.com.vn", employeeId:"VT-03988", departmentId:"d6", departmentName:"Phòng Tài chính",  role:"ADMIN", isActive:true,  avatarUrl:"", createdAt:"2025-09-08T00:00:00.000Z" },
+  { id:"u5", fullName:"Vũ Thị Hà",      email:"vu.thi.ha@viettel.com.vn",      employeeId:"VT-05502", departmentId:"d3", departmentName:"Phòng CSKH",       role:"USER",  isActive:false, avatarUrl:"", createdAt:"2026-03-14T00:00:00.000Z" },
+  { id:"u6", fullName:"Đỗ Hữu Khang",   email:"do.huu.khang@viettel.com.vn",   employeeId:"VT-05011", departmentId:"d4", departmentName:"Phòng Marketing",  role:"USER",  isActive:true,  avatarUrl:"", createdAt:"2025-12-27T00:00:00.000Z" },
+  { id:"u7", fullName:"Bùi Thanh Lan",   email:"bui.thanh.lan@viettel.com.vn",  employeeId:"VT-04203", departmentId:"d7", departmentName:"Phòng Pháp chế",  role:"USER",  isActive:true,  avatarUrl:"", createdAt:"2025-06-19T00:00:00.000Z" },
+  { id:"u8", fullName:"Hoàng Minh Tú",   email:"hoang.minh.tu@viettel.com.vn",  employeeId:"VT-05399", departmentId:"d2", departmentName:"Phòng Kinh doanh",role:"USER",  isActive:false, avatarUrl:"", createdAt:"2026-05-02T00:00:00.000Z" },
 ];
 
 export const DEPARTMENTS: Department[] = [
-  { id:"d1", name:"Phòng Kỹ thuật",    address:"Tầng 8, Tòa A, Lô D26, Cầu Giấy", description:"Phát triển & vận hành sản phẩm công nghệ",        userCount:28, deleted:false },
-  { id:"d2", name:"Phòng Kinh doanh",  address:"Tầng 6, Tòa A, Lô D26, Cầu Giấy", description:"Phát triển thị trường và khách hàng doanh nghiệp", userCount:19, deleted:false },
-  { id:"d3", name:"Phòng CSKH",        address:"Tầng 4, Tòa B, Lô D26, Cầu Giấy", description:"Chăm sóc và hỗ trợ khách hàng",                    userCount:14, deleted:false },
-  { id:"d4", name:"Phòng Marketing",   address:"Tầng 5, Tòa A, Lô D26, Cầu Giấy", description:"Truyền thông và phát triển thương hiệu",            userCount:9,  deleted:false },
-  { id:"d5", name:"Phòng Nhân sự",     address:"Tầng 3, Tòa B, Lô D26, Cầu Giấy", description:"Quản trị nguồn nhân lực và tuyển dụng",             userCount:7,  deleted:false },
-  { id:"d6", name:"Phòng R&D (cũ)",   address:"Tầng 9, Tòa A, Lô D26, Cầu Giấy", description:"Đã sáp nhập vào Phòng Kỹ thuật",                    userCount:0,  deleted:true  },
+  { id:"d1", name:"Phòng Kỹ thuật",    address:"Tầng 8, Tòa A, Lô D26, Cầu Giấy", description:"Phát triển & vận hành sản phẩm công nghệ",        userCount:28, deleted:false, createdAt:"2025-01-01T00:00:00.000Z" },
+  { id:"d2", name:"Phòng Kinh doanh",  address:"Tầng 6, Tòa A, Lô D26, Cầu Giấy", description:"Phát triển thị trường và khách hàng doanh nghiệp", userCount:19, deleted:false, createdAt:"2025-01-01T00:00:00.000Z" },
+  { id:"d3", name:"Phòng CSKH",        address:"Tầng 4, Tòa B, Lô D26, Cầu Giấy", description:"Chăm sóc và hỗ trợ khách hàng",                    userCount:14, deleted:false, createdAt:"2025-01-01T00:00:00.000Z" },
+  { id:"d4", name:"Phòng Marketing",   address:"Tầng 5, Tòa A, Lô D26, Cầu Giấy", description:"Truyền thông và phát triển thương hiệu",            userCount:9,  deleted:false, createdAt:"2025-01-01T00:00:00.000Z" },
+  { id:"d5", name:"Phòng Nhân sự",     address:"Tầng 3, Tòa B, Lô D26, Cầu Giấy", description:"Quản trị nguồn nhân lực và tuyển dụng",             userCount:7,  deleted:false, createdAt:"2025-01-01T00:00:00.000Z" },
+  { id:"d6", name:"Phòng R&D (cũ)",   address:"Tầng 9, Tòa A, Lô D26, Cầu Giấy", description:"Đã sáp nhập vào Phòng Kỹ thuật",                    userCount:0,  deleted:true,  createdAt:"2025-01-01T00:00:00.000Z" },
 ];
 
 export const TRANSCRIPT: TranscriptBlock[] = [

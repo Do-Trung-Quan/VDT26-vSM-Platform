@@ -36,6 +36,9 @@ export class ResetPasswordHandler {
       throw new BadRequestException('Mã OTP đã hết hạn');
     }
 
+    const isSame = await this.passwordHashService.compare(dto.newPassword, user.passwordHash);
+    if (isSame) throw new BadRequestException('Mật khẩu mới không được trùng mật khẩu hiện tại');
+
     const newPasswordHash = await this.passwordHashService.hash(dto.newPassword);
 
     await this.authUserPort.updatePasswordHash(user.id, newPasswordHash);
