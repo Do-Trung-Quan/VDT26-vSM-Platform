@@ -21,17 +21,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : null;
 
-    const message =
-      exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse
-        ? (exceptionResponse as { message: string | string[] }).message
-        : exception instanceof Error
-          ? exception.message
-          : 'Internal server error';
+    let message: string | string[];
+    if (exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse) {
+      message = (exceptionResponse as { message: string | string[] }).message;
+    } else if (exception instanceof Error) {
+      message = exception.message;
+    } else {
+      message = 'Internal server error';
+    }
 
     response.status(statusCode).json({
       statusCode,
       message,
-      error: HttpStatus[statusCode] ?? 'Error',
+      data: null,
+      meta: null,
     });
   }
 }

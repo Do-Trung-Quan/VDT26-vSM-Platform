@@ -1,0 +1,2 @@
+ASR_SHERPA_ENDPOINT=https://9981--main--nlp--sinhnq3.coder.vts-ai.space/api/transcribe/batch/sherpa
+EMBEDDING_ENDPOINT=https://9981--main--nlp--sinhnq3.coder.vts-ai.space/api/diarization/embedding

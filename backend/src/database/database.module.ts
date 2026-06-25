@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { types } from 'pg';
 import { SnakeCaseNamingStrategy } from './strategies/snake-naming.strategy';
+
+// Fix timezone: pg driver parses "timestamp without time zone" as LOCAL time by default.
+// Appending 'Z' forces UTC interpretation globally — affects all @CreateDateColumn / @UpdateDateColumn.
+types.setTypeParser(1114, (val: string) => new Date(val + 'Z'));
 
 @Module({
   imports: [

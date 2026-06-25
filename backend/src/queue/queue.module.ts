@@ -20,6 +20,7 @@ import { QUEUE_NAMES } from './queue.constants';
       { name: QUEUE_NAMES.TRANSCRIPTION_BATCH },
       { name: QUEUE_NAMES.SUMMARY_GENERATION },
       { name: QUEUE_NAMES.DOMAIN_EVENTS },
+      { name: QUEUE_NAMES.MAIL_OTP },
     ),
   ],
   exports: [BullModule],

@@ -41,6 +41,10 @@ export const envValidationSchema = Joi.object({
   AI_API_KEY: Joi.string().required(),
   AI_TIMEOUT_MS: Joi.number().default(10000),
 
+  JWT_REFRESH_TTL_MS: Joi.number().default(604800000),
+  OTP_TTL_MINUTES: Joi.number().default(10),
+  OTP_COOLDOWN_SECONDS: Joi.number().default(60),
+
   LIVE_RESUME_TTL_SECONDS: Joi.number().default(120),
   LIVE_MAX_CONCURRENT_SESSIONS: Joi.number().default(20),
   AI_MAX_CONCURRENCY: Joi.number().default(5),

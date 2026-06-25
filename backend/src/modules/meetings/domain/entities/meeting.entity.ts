@@ -53,7 +53,7 @@ export class Meeting extends AggregateRootBase {
   @Column({ type: 'enum', enum: MeetingStatus })
   status: MeetingStatus;
 
-  @Column({ nullable: true, default: null })
+  @Column({ type: 'varchar', nullable: true, default: null })
   audioUrl: string | null;
 
   @Column({ type: 'int', nullable: true, default: null })
