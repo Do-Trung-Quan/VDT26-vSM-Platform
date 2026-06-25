@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SnakeCaseNamingStrategy } from './strategies/snake-naming.strategy';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         extra: {
           max: configService.get<number>('database.poolSize'),
         },
+        namingStrategy: new SnakeCaseNamingStrategy(),
         autoLoadEntities: true,
         synchronize: false,
         migrationsRun: false,

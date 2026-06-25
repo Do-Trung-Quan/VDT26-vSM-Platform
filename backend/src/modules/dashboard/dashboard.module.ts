@@ -1,1 +1,4 @@
-// Bind IDashboardReadPort với impl đọc tổng hợp; chỉ expose query handler (không có command/entity ghi)
+import { Module } from '@nestjs/common';
+
+@Module({})
+export class DashboardModule {}

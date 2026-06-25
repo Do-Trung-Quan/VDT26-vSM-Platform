@@ -1,1 +1,9 @@
-// TypeOrmModule.forFeature([Department]); bind IDepartmentRepository; inject IUserRepository (read-only) để kiểm tra còn nhân sự
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Department } from './domain/entities/department.entity';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Department])],
+  exports: [TypeOrmModule],
+})
+export class DepartmentsModule {}

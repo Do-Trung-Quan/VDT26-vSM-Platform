@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,9 @@ interface MeetingFormDialogProps {
 }
 
 export function MeetingFormDialog({ open, onOpenChange, mode }: MeetingFormDialogProps) {
+  const router = useRouter();
   const [role, setRole] = useState<"live"|"upload">(mode);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,7 +111,12 @@ export function MeetingFormDialog({ open, onOpenChange, mode }: MeetingFormDialo
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
-          <Button onClick={() => onOpenChange(false)}>
+          <Button onClick={() => {
+            onOpenChange(false);
+            if (mode === "live") {
+              router.push("/live");
+            }
+          }}>
             {mode === "live" ? "Vào phòng họp" : "Tải lên & Xử lý"}
           </Button>
         </DialogFooter>
