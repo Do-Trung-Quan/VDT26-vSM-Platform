@@ -1,1 +1,8 @@
-// Output: id, sequence_number, text, speaker_label, start_time, end_time
+export class TranscriptBlockDto {
+  id: string;
+  sequenceNumber: number;
+  text: string;
+  speakerLabel: string;
+  startTime: number;
+  endTime: number;
+}

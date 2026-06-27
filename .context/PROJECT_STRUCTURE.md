@@ -371,7 +371,9 @@ src/modules/meetings/
 │   │   ├── get-summary.handler.ts           # Lấy MeetingSummary (phục vụ cơ chế 202/200)
 │   │   └── full-text-search.handler.ts      # Tìm kiếm toàn văn trên transcript_blocks.text
 │   ├── streaming/                           # Orchestrator cho luồng realtime (đặt trong application — là Use Case, không phải hạ tầng)
-│   │   ├── transcription.service.ts         # Điều phối 1 phiên Live: nhận audio → VAD → gọi song song STT + SpeakerIdentify → tạo block → buffer Redis → emit
+│   │   ├── transcription.service.ts         # Điều phối 1 phiên Live: nhận audio → convert WAV → VAD → batch ASR+Embedding → online clustering → tạo block → emit
+│   │   ├── speaker-diarization.service.ts   # CỐT LÕI: Online clustering (live) và offline clustering (upload) bằng cosine similarity; quản lý speaker_registry
+│   │   ├── audio-converter.ts               # Tiện ích chuyển đổi audio: raw PCM / WebM → WAV 16kHz mono (ffmpeg-static); dùng chung live + batch
 │   │   ├── live-session.service.ts          # Quản lý vòng đời phiên: open (kiểm ngưỡng), tick, disconnect (đặt TTL), resume (bù missed_blocks)
 │   │   ├── reconnect.service.ts             # Xử lý resume: đối chiếu last_received_sequence với buffer Redis, dựng lại/kiểm tra VAD instance
 │   │   └── finalize-session.service.ts      # CỐT LÕI: đóng file tạm → upload Object Storage → lấy URL ghi DB → bulkSave transcript → xóa file tạm → COMPLETED
@@ -410,9 +412,9 @@ src/modules/meetings/
 │       ├── meeting.repository.port.ts        # IMeetingRepository: save, findById, listByDepartment, listAll, searchByTitle, countActive
 │       ├── transcript-block.repository.port.ts # ITranscriptBlockRepository: bulkSave, findByMeeting, fullTextSearch, updateSpeakerLabelFrom(seq)
 │       ├── meeting-summary.repository.port.ts # IMeetingSummaryRepository: save, findByMeeting (UNIQUE meeting_id)
-│       ├── speech-to-text.port.ts            # ISpeechToTextPort: transcribe(audioSegment) → text (Viettel Speech2Text)
-│       ├── speaker-identify.port.ts          # ISpeakerIdentifyPort: identify(audioSegment) → speaker_id (Viettel Speaker Identify)
-│       ├── vad.port.ts                       # IVadPort: feed(audio) → segment[] hoàn chỉnh kèm start/end_time; quản lý VAD instance theo phiên
+│       ├── speech-to-text.port.ts            # ISpeechToTextPort: batchTranscribe(segments: Buffer[]) → string[] — Viettel ASR Sherpa (batch, WAV 16kHz mono)
+│       ├── speaker-embedding.port.ts         # ISpeakerEmbeddingPort: batchGetEmbeddings(segments: Buffer[]) → (number[]|null)[] — Viettel Embedding 512-dim vector
+│       ├── vad.port.ts                       # IVadPort: feed(audio) → segment[] hoàn chỉnh kèm start/end_time; quản lý VAD instance theo phiên (WebRTC VAD)
 │       ├── local-audio-storage.port.ts       # ILocalAudioStoragePort: append(meetingId,chunk), close(meetingId)→path, remove(path)
 │       ├── transcript-buffer.port.ts         # ITranscriptBufferPort (Redis): push(block), getAfter(seq), setResumeTtl, clearResumeTtl, drain
 │       ├── live-session-registry.port.ts     # ILiveSessionRegistryPort (Redis): countLive, increment/decrement, acquireAiSlot/release (concurrency)
@@ -424,9 +426,9 @@ src/modules/meetings/
     │   ├── transcript-block.repository.ts    # Triển khai ITranscriptBlockRepository qua Repository<TranscriptBlock> (bulkSave, full-text search bằng index PostgreSQL)
     │   └── meeting-summary.repository.ts     # Triển khai IMeetingSummaryRepository qua Repository<MeetingSummary>
     └── adapters/
-        ├── viettel-speech-to-text.adapter.ts # Triển khai ISpeechToTextPort: gọi HTTP Viettel Speech2Text, chuẩn hóa kết quả, retry/timeout
-        ├── viettel-speaker-identify.adapter.ts # Triển khai ISpeakerIdentifyPort: gọi HTTP Viettel Speaker Identify
-        ├── silero-vad.adapter.ts             # Triển khai IVadPort: phân tích khoảng lặng, cắt audio thành block hoàn chỉnh (Streaming & Batching)
+        ├── viettel-speech-to-text.adapter.ts  # Triển khai ISpeechToTextPort: POST batch WAV → /api/transcribe/batch/sherpa, parse [{transcript}], retry/timeout
+        ├── viettel-speaker-embedding.adapter.ts # Triển khai ISpeakerEmbeddingPort: POST batch WAV → /api/diarization/embedding, parse [{embedding:float[512]|null}]
+        ├── webrtc-vad.adapter.ts             # Triển khai IVadPort: node-vad (WebRTC algo, không cần ONNX), cắt PCM 16kHz theo silence >600ms
         ├── local-audio-storage.adapter.ts    # Triển khai ILocalAudioStoragePort: ghi nối tiếp file tạm trên đĩa server, đóng & xóa khi finalize
         ├── redis-transcript-buffer.adapter.ts # Triển khai ITranscriptBufferPort: lưu đệm block + đặt/hủy TTL resume trên Redis
         ├── redis-live-session-registry.adapter.ts # Triển khai ILiveSessionRegistryPort: bộ đếm phiên Live & semaphore concurrency AI (Redis)
@@ -533,8 +535,8 @@ Mỗi Port (`domain`) được bind tới một implementation (`infrastructure`
 | `IMeetingSummaryRepository` | `MeetingSummaryRepository` | meetings |
 | `INotificationRepository` | `NotificationRepository` | notifications |
 | `ISpeechToTextPort` | `ViettelSpeechToTextAdapter` | meetings |
-| `ISpeakerIdentifyPort` | `ViettelSpeakerIdentifyAdapter` | meetings |
-| `IVadPort` | `SileroVadAdapter` | meetings |
+| `ISpeakerEmbeddingPort` | `ViettelSpeakerEmbeddingAdapter` | meetings |
+| `IVadPort` | `WebrtcVadAdapter` | meetings |
 | `ILocalAudioStoragePort` | `LocalAudioStorageAdapter` | meetings |
 | `ITranscriptBufferPort` | `RedisTranscriptBufferAdapter` | meetings |
 | `ILiveSessionRegistryPort` | `RedisLiveSessionRegistryAdapter` | meetings |

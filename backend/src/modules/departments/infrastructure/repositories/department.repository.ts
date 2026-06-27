@@ -49,7 +49,7 @@ export class DepartmentRepository implements IDepartmentRepository {
 
     const qb = this.repo
       .createQueryBuilder('d')
-      .orderBy('d.created_at', 'DESC')
+      .orderBy('d.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 

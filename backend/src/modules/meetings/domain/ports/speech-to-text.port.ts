@@ -1,1 +1,4 @@
-// ISpeechToTextPort: transcribe(audioSegment) → text (Viettel Speech2Text)
+/** Batch STT — Viettel ASR Sherpa. Gửi N file WAV 16kHz mono, nhận N transcript. */
+export interface ISpeechToTextPort {
+  batchTranscribe(segments: Buffer[]): Promise<string[]>;
+}

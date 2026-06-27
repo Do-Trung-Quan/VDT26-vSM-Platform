@@ -256,124 +256,205 @@ Mở **Redis Insight** → kết nối `localhost:6379` → xem queue `bull:tran
 
 ## Giai đoạn 6 — Module `meetings` — Live STT Realtime (Trọng tâm MP2)
 
-> **Đây là giai đoạn phức tạp và quan trọng nhất.** Cần Viettel AI credentials thật hoặc mock server để test đầy đủ.
+> **Đây là giai đoạn phức tạp và quan trọng nhất.**
+>
+> **Thay đổi kiến trúc so với thiết kế gốc** (dựa trên 2 Viettel API thực tế):
+> - `ISpeakerIdentifyPort` → **`ISpeakerEmbeddingPort`**: Viettel trả embedding vector 512-dim, KHÔNG phải speaker_id trực tiếp
+> - `SileroVadAdapter` (ONNX) → **`WebrtcVadAdapter`** (thư viện `node-vad`, không cần model file)
+> - Thêm mới **`SpeakerDiarizationService`**: online clustering (live) + offline clustering (upload) bằng cosine similarity
+> - Thêm mới **`AudioConverter`**: convert PCM/WebM → WAV 16kHz mono (ffmpeg-static) trước khi gọi AI API
+> - Cả 2 API AI là **batch** (nhiều file WAV / 1 request) → Live gọi 1 file/lần, Upload gọi N files/lần
+> - **KHÔNG** re-process lại toàn bộ audio sau khi kết thúc live (tránh xung đột với edit_speaker thủ công)
+> - Cần thêm vào `.env`: `ASR_SHERPA_ENDPOINT` và `EMBEDDING_ENDPOINT`
 
-### Task 6.1 — Implement AI Adapters (Viettel STT + Speaker Identify)
+---
 
-**Mục tiêu:** Gọi được Viettel AI API để chuyển audio segment → text + speaker_id.
+### Luồng Core 1 — Live Meeting (Realtime STT)
+```
+Browser mic → WebSocket binary → server
+  → append into temp file
+  → VAD (node-vad) phát hiện silence >600ms → cắt utterance segment
+  → convert PCM → WAV 16kHz mono (AudioConverter)
+  → Gọi song song (1 file):
+      ├─ ASR Sherpa  → transcript text
+      └─ Embedding   → float[512] vector
+  → SpeakerDiarizationService.assignLabel(vector)
+      → cosine_similarity vs speaker_registry → "Người nói N"
+  → Tạo TranscriptBlock → Redis buffer → emit transcript_update
+  → end_session → FinalizeSessionService:
+      file tạm → MinIO → URL → Meeting.COMPLETED → bulkSave blocks
+```
 
-Tôi sẽ làm: Implement 2 adapter với HTTP call, retry, timeout, chuẩn hóa response.
+### Luồng Core 2 — Upload Audio (Batch)
+```
+POST /meetings/upload → MinIO + PROCESSING → BullMQ job
+→ BatchTranscriptionProcessor:
+    → VAD toàn bộ file → N segments với timestamps
+    → AudioConverter batch
+    → 1 request ASR (N files) → [transcript×N]
+    → 1 request Embedding (N files) → [float[512]×N]
+    → SpeakerDiarizationService.clusterOffline(all_embeddings)
+        → agglomerative clustering → speaker labels nhất quán
+    → bulkSave N TranscriptBlocks → Meeting.COMPLETED
+```
+
+---
+
+### Task 6.1 — AudioConverter + WebrtcVadAdapter
+
+**Mục tiêu:** Nhận audio binary thô từ browser → convert WAV → phát hiện khoảng lặng → cắt segments.
+
+Tôi sẽ làm:
+- `AudioConverter` (utility): sử dụng `fluent-ffmpeg` + `ffmpeg-static`, convert buffer sang WAV 16kHz mono 16-bit PCM
+- `WebrtcVadAdapter`: implement `IVadPort` dùng `node-vad` (cài `npm install node-vad`); mode `NORMAL` hoặc `AGGRESSIVE`; quản lý VAD instance per session
+
+```bash
+npm install node-vad fluent-ffmpeg ffmpeg-static
+npm install --save-dev @types/fluent-ffmpeg
+```
 
 **Cách kiểm thử:**
-
-Tạo file test nhỏ gọi trực tiếp adapter:
 ```bash
+# Dùng test file WAV mẫu, check output segments
 npx ts-node -e "
-const adapter = new ViettelSpeechToTextAdapter(configService);
-const text = await adapter.transcribe(fs.readFileSync('test-audio.wav'));
-console.log(text);
+  const vad = new WebrtcVadAdapter();
+  const segments = await vad.processFile('test-audio.wav');
+  console.log('Segments:', segments.length, segments.map(s => s.endTime - s.startTime));
 "
 ```
-> ✅ Kết quả: In ra đoạn text nhận dạng từ file audio test.
-> ⚠️ Nếu chưa có AI credentials: dùng **mock adapter** trả chuỗi giả để các bước sau không bị chặn.
+> ✅ Kết quả: In ra danh sách segments với start/end_time hợp lý (~0.5s đến ~5s mỗi đoạn)
 
 ---
 
-### Task 6.2 — Implement VAD & Local Audio Storage Adapters
+### Task 6.2 — Viettel AI Adapters (ASR + Embedding)
 
-**Mục tiêu:** Nhận audio binary → phát hiện khoảng lặng → cắt thành block → ghi file tạm.
+**Mục tiêu:** Gọi được 2 Viettel API, nhận transcript text và embedding vector.
 
-Tôi sẽ làm: `SileroVadAdapter`, `LocalAudioStorageAdapter` (append chunk to temp file).
+Tôi sẽ làm:
+- `ViettelSpeechToTextAdapter`: implement `ISpeechToTextPort.batchTranscribe(segments: Buffer[]) → string[]`; POST multipart form-data, field `files`, nhiều WAV; parse `[{transcript}]` array
+- `ViettelSpeakerEmbeddingAdapter`: implement `ISpeakerEmbeddingPort.batchGetEmbeddings(segments: Buffer[]) → (number[]|null)[]`; POST multipart form-data, field `files`; parse `[{embedding: float[]|null}]`; handle `null` embedding (segment quá ngắn/nhiễu)
+- Thêm 2 biến vào `.env`: `ASR_SHERPA_ENDPOINT` + `EMBEDDING_ENDPOINT` (từ file API_api.txt đã có)
+
+**Cách kiểm thử:**
+```bash
+# Test với 1-2 file WAV thực tế
+POST ASR_SHERPA_ENDPOINT   form-data: files=@segment.wav
+POST EMBEDDING_ENDPOINT    form-data: files=@segment.wav
+```
+> ✅ Kết quả: ASR trả `[{"transcript": "xin chào..."}]`, Embedding trả `[{"embedding": [0.01, ...]}]` (array 512 phần tử)
 
 ---
 
-### Task 6.3 — Implement Redis Adapters (Transcript Buffer + Live Session Registry)
+### Task 6.3 — SpeakerDiarizationService (Online + Offline Clustering)
 
-**Mục tiêu:** Lưu block transcript trên Redis phục vụ reconnect, quản lý slot concurrency AI.
+**Mục tiêu:** Từ embedding vector → gán nhãn "Người nói N" nhất quán xuyên suốt phiên.
 
-Tôi sẽ làm: `RedisTranscriptBufferAdapter`, `RedisLiveSessionRegistryAdapter`.
+Tôi sẽ làm `SpeakerDiarizationService` với:
+- **Online clustering** (cho live): `assignLabel(embedding) → string`
+  - Duy trì `speaker_registry: Map<label, {centroid: number[], count: number}>` per session
+  - Cosine similarity > 0.82 → same speaker, cập nhật centroid (running avg)
+  - Dưới threshold → tạo nhãn mới "Người nói N"
+  - Sau mỗi block, tự merge 2 centroid gần nhau (> 0.88) nếu phát sinh trùng
+- **Offline clustering** (cho upload batch): `clusterOffline(embeddings: (number[]|null)[]) → string[]`
+  - Agglomerative clustering với threshold 0.82
+  - Trả array nhãn cùng chiều dài với input, bỏ qua null embeddings
+- Helper: `cosineSimlarity(A, B): number`
 
-**Cách kiểm thử sau 6.2 + 6.3:**
+**Cách kiểm thử:** Unit test với mảng embeddings giả định (2 cụm rõ ràng) → verify ra đúng 2 nhãn
 
-Mở **Redis Insight** sau khi bắt đầu 1 phiên live:
+---
+
+### Task 6.4 — Redis Adapters + LocalAudioStorage
+
+**Mục tiêu:** Lưu đệm transcript block (reconnect), đếm session, ghi file tạm audio.
+
+Tôi sẽ làm:
+- `RedisTranscriptBufferAdapter`: `push(block)`, `getAfter(seq)`, `setResumeTtl`, `drain`
+- `RedisLiveSessionRegistryAdapter`: `countLive`, `increment/decrement`, `acquireAiSlot/release`
+- `LocalAudioStorageAdapter`: `append(meetingId, chunk)`, `close(meetingId) → filePath`, `remove(path)`
+
+**Cách kiểm thử:** Redis Insight sau khi bắt đầu phiên live:
 - Key `live_sessions:count` → số phiên đang chạy
 - Key `transcript_buffer:<meeting_id>` → danh sách block đã buffer
 
 ---
 
-### Task 6.4 — Implement Streaming Services
+### Task 6.5 — TranscriptionService + LiveSessionService + ReconnectService
 
-**Mục tiêu:** Orchestrate toàn bộ luồng live: audio → VAD → STT song song → TranscriptBlock.
+**Mục tiêu:** Orchestrate toàn bộ luồng live: nhận audio chunk → VAD → AI batch → clustering → emit block.
 
-Tôi sẽ làm: `TranscriptionService`, `LiveSessionService`, `ReconnectService`.
+Tôi sẽ làm:
+- `TranscriptionService.processChunk(sessionId, pcmChunk)`:
+  1. Đẩy PCM vào VAD instance của session
+  2. Khi VAD trả segment → `AudioConverter.toWav(segment)`
+  3. Gọi song song `batchTranscribe([wav])` + `batchGetEmbeddings([wav])`
+  4. `SpeakerDiarizationService.assignLabel(embedding)` → speaker_label
+  5. Tạo TranscriptBlock → lưu Redis buffer → trả về caller để emit
+- `LiveSessionService`: quản lý vòng đời session (open kiểm ngưỡng, disconnect đặt TTL)
+- `ReconnectService`: lấy `missed_blocks` từ Redis theo `last_received_sequence`
 
 ---
 
-### Task 6.5 — Implement FinalizeSessionService & LiveSessionTimeoutListener
+### Task 6.6 — FinalizeSessionService + LiveSessionTimeoutListener
 
-**Mục tiêu:** Kết thúc phiên → upload file hoàn chỉnh lên S3 → xóa file tạm → Meeting COMPLETED.
+**Mục tiêu:** Kết thúc phiên → upload audio → lưu URL → COMPLETED.
 
-Tôi sẽ làm: `FinalizeSessionService` (cốt lõi: file tạm → MinIO → URL → DB → xóa), `LiveSessionTimeoutListener`.
+Tôi sẽ làm:
+- `FinalizeSessionService`: đóng `LocalAudioStorage` → upload WAV → `Meeting.complete(audioUrl)` → `bulkSave transcript` → `remove file tạm`
+- `LiveSessionTimeoutListener`: BullMQ delayed job; khi TTL hết → tự gọi FinalizeSessionService (Scenario 3)
 
 ---
 
-### Task 6.6 — Implement TranscriptionGateway (WebSocket)
+### Task 6.7 — TranscriptionGateway (WebSocket)
 
-**Mục tiêu:** Client kết nối WebSocket, gửi audio chunk, nhận `transcript_update` realtime.
+**Mục tiêu:** Client kết nối WS, gửi audio binary, nhận `transcript_update` realtime.
 
-Tôi sẽ làm: Implement `transcription.gateway.ts` xử lý 6 event: `open_session`, `audio_chunk`, `edit_speaker`, `end_session`, `resume`, `handleDisconnect`.
+Tôi sẽ làm: `transcription.gateway.ts` xử lý 6 event:
 
-**Cách kiểm thử (Task 6.1 → 6.6):**
+| Event | Xử lý |
+|---|---|
+| `open_session` | Xác thực JWT, kiểm ngưỡng, init VAD + Redis buffer |
+| `audio_chunk` | binary → `TranscriptionService.processChunk()` → emit `transcript_update` |
+| `edit_speaker` | Cập nhật nhãn từ seq X trở đi; cập nhật speaker_registry centroid |
+| `end_session` | Gọi `FinalizeSessionService` |
+| `resume` | `ReconnectService` bù missed_blocks |
+| `handleDisconnect` | Đặt TTL chờ resume trên Redis |
 
-Cài **[Postman](https://www.postman.com/)** (hỗ trợ WebSocket / Socket.IO) hoặc dùng `wscat`:
+**Cách kiểm thử (Task 6.1 → 6.7):**
+
+Dùng **Postman WebSocket** hoặc `wscat`:
 ```bash
-npm install -g wscat
-```
-
-Test flow cơ bản:
-```bash
-# Terminal 1 — server đang chạy npm run start:dev
-
-# Terminal 2 — kết nối WebSocket
-wscat -c "ws://localhost:3000"
-
-# Gửi event open_session
-> {"event":"open_session","data":{"meeting_id":"<uuid>","token":"<access_token>"}}
-
-# Gửi audio chunk (dạng binary) → server emit transcript_update
-# Gửi end_session
+# Kết nối
+wscat -c "ws://localhost:3001"
+# open_session
+> {"event":"open_session","data":{"meeting_id":"<uuid>","token":"<JWT>"}}
+# Gửi audio binary (WAV chunks)
+# end_session
 > {"event":"end_session","data":{"meeting_id":"<uuid>"}}
 ```
 
-Sau `end_session` kiểm tra trong **TablePlus**:
-- Bảng `meetings`: `status=COMPLETED`, `audio_url` có giá trị, `ended_at` có giá trị
-- Bảng `transcript_blocks`: nhiều dòng theo `sequence_number` tăng dần
-- **MinIO Console** (`http://localhost:9001`): có file audio trong bucket
-
-> ✅ Kết quả mong đợi: Meeting chuyển COMPLETED, audio lên MinIO, transcript_blocks có dữ liệu.
+Kiểm tra TablePlus: `transcript_blocks` có dòng với `speaker_label = "Người nói 1"`, `text` có nội dung, timestamps hợp lệ.
 
 ---
 
-### Task 6.7 — Implement BatchTranscriptionProcessor (Upload flow)
+### Task 6.8 — BatchTranscriptionProcessor (Upload flow)
 
-**Mục tiêu:** Worker xử lý nền file audio tải lên → bóc băng → COMPLETED (không cần WebSocket).
+**Mục tiêu:** Worker BullMQ xử lý nền file upload → VAD batch → AI batch → offline clustering → COMPLETED.
 
-Tôi sẽ làm: BullMQ processor lắng nghe `transcription-batch`, chạy VAD → STT → bulkSave transcript.
+Tôi sẽ làm: `batch-transcription.processor.ts`:
+1. Tải WAV từ MinIO
+2. VAD toàn bộ file → N segments với timestamps
+3. `AudioConverter.batchToWav(segments)`
+4. Gọi 1 lần `batchTranscribe(N wavs)` + 1 lần `batchGetEmbeddings(N wavs)`
+5. `SpeakerDiarizationService.clusterOffline(all_embeddings)` → nhãn nhất quán
+6. `bulkSave(N TranscriptBlocks)` → `Meeting.COMPLETED`
 
 **Cách kiểm thử:**
-
-```bash
-# Upload 1 file audio qua REST
-POST /api/meetings/upload  (multipart)
 ```
-
-Mở **Redis Insight** → queue `bull:transcription-batch` → thấy job chuyển trạng thái `waiting → active → completed`.
-
-Sau vài giây, query **TablePlus**:
-- `meetings` table: `status=COMPLETED`
-- `transcript_blocks` table: có nhiều dòng text từ file audio
-
-> ✅ Kết quả mong đợi: Không cần WebSocket, chỉ upload file rồi đợi → transcript tự động xuất hiện.
+POST /api/meetings/upload  (file WAV thực tế)
+```
+Redis Insight: job `transcription-batch` chuyển `waiting → active → completed`.
+TablePlus: `transcript_blocks` nhiều dòng, speaker_label phân biệt đúng người nói.
 
 ---
 

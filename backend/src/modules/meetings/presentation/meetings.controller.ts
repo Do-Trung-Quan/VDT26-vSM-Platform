@@ -1,6 +1,116 @@
-// REST tra cứu theo phòng ban (JWT + DepartmentScopeGuard):
-//   GET    /meetings              → danh sách (ưu tiên LIVE→PROCESSING→COMPLETED, rồi created_at desc)
-//   GET    /meetings/search       → tìm theo title trong phạm vi phòng ban
-//   GET    /meetings/:id          → chi tiết Meeting + audio_url (hỗ trợ HTTP Range cho player)
-//   GET    /meetings/:id/transcript → danh sách TranscriptBlock (đồng bộ theo audio)
-//   DELETE /meetings/:id          → xóa mềm (User chỉ xóa cuộc họp mình host; Admin xóa mọi cuộc họp)
+import {
+  Controller, Delete, Get, HttpCode, HttpStatus,
+  Param, Query, UseGuards,
+} from '@nestjs/common';
+import { DepartmentScopeGuard } from '../../../common/guards/department-scope.guard';
+import { CurrentUser, CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
+import { ParseUuidOr400Pipe } from '../../../common/pipes/parse-uuid-or-400.pipe';
+import { ListMeetingsQueryDto, SearchMeetingsQueryDto } from '../application/dto/list-meetings-query.dto';
+import { ListMeetingsHandler } from '../application/query/list-meetings.handler';
+import { GetMeetingDetailHandler } from '../application/query/get-meeting-detail.handler';
+import { GetTranscriptHandler } from '../application/query/get-transcript.handler';
+import { SearchMeetingsHandler } from '../application/query/search-meetings.handler';
+import { FullTextSearchHandler, FullTextSearchQuery } from '../application/query/full-text-search.handler';
+import { SoftDeleteMeetingHandler } from '../application/command/soft-delete-meeting.handler';
+import { Transform } from 'class-transformer';
+import { IsDate, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+
+class FullTextSearchQueryDto {
+  @IsString()
+  keyword: string;
+
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value ? new Date(value) : undefined))
+  @IsDate()
+  fromDate?: Date;
+
+  @IsOptional()
+  @Transform(({ value }) => (value ? new Date(value) : undefined))
+  @IsDate()
+  toDate?: Date;
+
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsInt()
+  @Min(1)
+  page: number = 1;
+
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit: number = 20;
+}
+
+@Controller('meetings')
+@UseGuards(DepartmentScopeGuard)
+export class MeetingsController {
+  constructor(
+    private readonly listHandler: ListMeetingsHandler,
+    private readonly detailHandler: GetMeetingDetailHandler,
+    private readonly transcriptHandler: GetTranscriptHandler,
+    private readonly searchHandler: SearchMeetingsHandler,
+    private readonly fullTextSearchHandler: FullTextSearchHandler,
+    private readonly softDeleteHandler: SoftDeleteMeetingHandler,
+  ) {}
+
+  @Get()
+  list(@CurrentUser() user: CurrentUserPayload, @Query() query: ListMeetingsQueryDto) {
+    return this.listHandler.execute(user.departmentId, query);
+  }
+
+  // ── Các route STATIC phải đứng TRƯỚC @Get(':id') ──
+
+  @Get('search')
+  search(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query() query: SearchMeetingsQueryDto,
+  ) {
+    const deptScope = user.role === 'ADMIN' ? null : user.departmentId;
+    return this.searchHandler.execute(query.keyword ?? '', deptScope, query);
+  }
+
+  @Get('full-text-search')
+  fullTextSearch(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query() query: FullTextSearchQueryDto,
+  ) {
+    const deptScope = user.role === 'ADMIN' ? null : user.departmentId;
+    const searchQuery: FullTextSearchQuery = {
+      keyword: query.keyword,
+      departmentId: query.departmentId,
+      fromDate: query.fromDate,
+      toDate: query.toDate,
+      page: query.page,
+      limit: query.limit,
+    };
+    return this.fullTextSearchHandler.execute(searchQuery, deptScope);
+  }
+
+  // ── Route DYNAMIC (:id) phải đứng SAU tất cả route static ──
+
+  @Get(':id')
+  detail(@Param('id', ParseUuidOr400Pipe) id: string) {
+    return this.detailHandler.execute(id);
+  }
+
+  @Get(':id/transcript')
+  transcript(@Param('id', ParseUuidOr400Pipe) id: string) {
+    return this.transcriptHandler.execute(id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  async softDelete(
+    @Param('id', ParseUuidOr400Pipe) id: string,
+    @CurrentUser() user: CurrentUserPayload,
+  ): Promise<{ message: string }> {
+    await this.softDeleteHandler.execute(id, user);
+    return { message: 'Xóa cuộc họp thành công' };
+  }
+}

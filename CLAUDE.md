@@ -178,8 +178,8 @@ presentation  →  application  →  domain  ←  infrastructure
 | `IMeetingSummaryRepository` | `MeetingSummaryRepository` | meetings |
 | `INotificationRepository` | `NotificationRepository` | notifications |
 | `ISpeechToTextPort` | `ViettelSpeechToTextAdapter` | meetings |
-| `ISpeakerIdentifyPort` | `ViettelSpeakerIdentifyAdapter` | meetings |
-| `IVadPort` | `SileroVadAdapter` | meetings |
+| `ISpeakerEmbeddingPort` | `ViettelSpeakerEmbeddingAdapter` | meetings |
+| `IVadPort` | `WebrtcVadAdapter` | meetings |
 | `ILocalAudioStoragePort` | `LocalAudioStorageAdapter` | meetings |
 | `ITranscriptBufferPort` | `RedisTranscriptBufferAdapter` | meetings |
 | `ILiveSessionRegistryPort` | `RedisLiveSessionRegistryAdapter` | meetings |
