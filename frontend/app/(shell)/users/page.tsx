@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { usersApi } from "@/lib/api/users";
 import { departmentsApi } from "@/lib/api/departments";
 import { ApiError } from "@/lib/api";
@@ -232,15 +233,7 @@ export default function UsersPage() {
         {/* Pagination */}
         <div className="flex items-center justify-between px-[18px] py-3.5 border-t border-line">
           <span className="text-[13px] text-tx-light">Hiển thị {users.length} / {total} nhân sự</span>
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map(p => (
-              <button key={p} onClick={() => fetchUsers(p)}
-                className={cn("w-8 h-8 rounded-[6px] flex items-center justify-center text-[13px] transition-colors",
-                  p === page ? "bg-brand text-white font-semibold" : "border border-line hover:bg-surface text-tx-dark")}>
-                {p}
-              </button>
-            ))}
-          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={fetchUsers} />
         </div>
       </div>
 

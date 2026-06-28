@@ -12,6 +12,7 @@ export class MeetingListItemResponseDto {
   departmentId: string;
   departmentName: string;
   isLocked: boolean;
+  deletedAt: string | null;
   startedAt: string | null;
   endedAt: string | null;
   createdAt: string;
@@ -28,6 +29,7 @@ export class MeetingListItemResponseDto {
     dto.departmentId  = m.departmentId;
     dto.departmentName = m.department?.name ?? '';
     dto.isLocked      = m.isLocked;
+    dto.deletedAt     = m.deletedAt?.toISOString() ?? null;
     dto.startedAt     = m.startedAt?.toISOString() ?? null;
     dto.endedAt       = m.endedAt?.toISOString() ?? null;
     dto.createdAt     = m.createdAt.toISOString();

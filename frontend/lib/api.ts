@@ -65,9 +65,10 @@ async function apiFetch<T>(
 }
 
 export const api = {
-  get:    <T>(path: string)                  => apiFetch<T>(path),
-  post:   <T>(path: string, body?: unknown)  => apiFetch<T>(path, { method: "POST",   body: JSON.stringify(body) }),
-  patch:  <T>(path: string, body?: unknown)  => apiFetch<T>(path, { method: "PATCH",  body: JSON.stringify(body) }),
-  delete: <T>(path: string)                  => apiFetch<T>(path, { method: "DELETE" }),
-  upload: <T>(path: string, form: FormData)  => apiFetch<T>(path, { method: "PATCH",  body: form }),
+  get:      <T>(path: string)                  => apiFetch<T>(path),
+  post:     <T>(path: string, body?: unknown)  => apiFetch<T>(path, { method: "POST",   body: JSON.stringify(body) }),
+  patch:    <T>(path: string, body?: unknown)  => apiFetch<T>(path, { method: "PATCH",  body: JSON.stringify(body) }),
+  delete:   <T>(path: string)                  => apiFetch<T>(path, { method: "DELETE" }),
+  upload:   <T>(path: string, form: FormData)  => apiFetch<T>(path, { method: "PATCH",  body: form }),
+  postForm: <T>(path: string, form: FormData)  => apiFetch<T>(path, { method: "POST",   body: form }),
 };

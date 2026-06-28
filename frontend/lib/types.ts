@@ -27,25 +27,45 @@ export interface Department {
   createdAt: string;
 }
 
-/** Meeting — vẫn dùng mock data, sẽ sync ở Phase 5 */
-export interface Meeting {
+/** Sync với backend MeetingListItemResponseDto */
+export interface MeetingListItem {
   id: string;
   title: string;
-  status: MeetingStatus;
+  description: string | null;
   type: MeetingType;
-  host: string;
-  dept: string;
-  created: string;
-  locked: boolean;
-  deleted?: boolean;
+  status: MeetingStatus;
+  hostId: string;
+  hostName: string;
+  departmentId: string;
+  departmentName: string;
+  isLocked: boolean;
+  deletedAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
 }
 
+/** Sync với backend MeetingDetailResponseDto */
+export interface MeetingDetail extends MeetingListItem {
+  audioUrl: string | null;
+  durationSeconds: number | null;
+}
+
+/** Sync với backend TranscriptBlockResponseDto */
 export interface TranscriptBlock {
-  seq: number;
-  speaker: string;
-  speakerIndex: number;
+  id: string;
+  sequenceNumber: number;
   text: string;
-  time: string;
+  speakerLabel: string;
+  startTime: number;
+  endTime: number;
+}
+
+export type SummaryStatus = "NOT_STARTED" | "PROCESSING" | "COMPLETED";
+
+export interface MeetingSummary {
+  status: SummaryStatus;
+  summaryText: string | null;
 }
 
 export interface KpiCard {

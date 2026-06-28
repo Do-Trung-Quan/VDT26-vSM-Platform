@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { departmentsApi } from "@/lib/api/departments";
 import { ApiError } from "@/lib/api";
 import type { Department } from "@/lib/types";
@@ -201,26 +202,10 @@ export default function DepartmentsPage() {
         </Table>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-[18px] py-3.5 border-t border-line">
-            <span className="text-[13px] text-tx-light">
-              Hiển thị {depts.length} / {total} phòng ban
-            </span>
-            <div className="flex items-center gap-1.5">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map(p => (
-                <button key={p} onClick={() => fetchDepts(p)}
-                  className={cn(
-                    "w-8 h-8 rounded-[6px] flex items-center justify-center text-[13px] transition-colors",
-                    p === page
-                      ? "bg-brand text-white font-semibold"
-                      : "border border-line hover:bg-surface text-tx-dark"
-                  )}>
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="flex items-center justify-between px-[18px] py-3.5 border-t border-line">
+          <span className="text-[13px] text-tx-light">Hiển thị {depts.length} / {total} phòng ban</span>
+          <Pagination page={page} totalPages={totalPages} onPageChange={fetchDepts} />
+        </div>
       </div>
 
       {/* Add/Edit Dialog */}

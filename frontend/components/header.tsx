@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInitials, getAvatarColor } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 const NOTIFICATIONS = [
   { id:"n1", message:'Cuộc họp "Họp giao ban kỹ thuật tuần 25" vừa được tạo.', time:"5 phút trước", read:false },
@@ -16,7 +16,9 @@ const NOTIFICATIONS = [
 export function Header({ title }: { title: string }) {
   const { user, profile, logout } = useAuth();
   const router   = useRouter();
+  const pathname = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
+  const isMeetingsPage = pathname === "/meetings";
   const unread = NOTIFICATIONS.filter(n => !n.read).length;
 
   const handleLogout = async () => {
@@ -33,9 +35,20 @@ export function Header({ title }: { title: string }) {
 
   return (
     <header className="h-16 flex-none bg-white border-b border-line flex items-center justify-between px-7 sticky top-0 z-20">
-      <div className="text-[18px] font-bold">{title}</div>
+      <div className="text-[18px] font-bold flex-none">{title}</div>
 
-      <div className="flex items-center gap-4">
+      {/* Full-text search bar — chỉ hiện ở /meetings, UI only (Phase sau tích hợp) */}
+      {isMeetingsPage && (
+        <button
+          onClick={() => {/* TODO Phase 6+: navigate to full-text search screen */}}
+          className="flex-1 max-w-[380px] mx-8 flex items-center gap-2 px-3.5 h-9 rounded-[8px] border border-line bg-surface text-tx-muted text-[13px] hover:border-brand hover:bg-brand/[0.03] transition-colors cursor-text text-left"
+        >
+          <Search size={14} className="flex-none" />
+          <span className="truncate">Tìm kiếm toàn văn nội dung cuộc họp…</span>
+        </button>
+      )}
+
+      <div className="flex items-center gap-4 flex-none">
         {/* Bell */}
         <div className="relative cursor-pointer" onClick={() => setNotifOpen(v => !v)}>
           <Bell size={21} className="text-tx-mid" />
