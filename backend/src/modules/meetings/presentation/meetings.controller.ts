@@ -2,19 +2,20 @@ import {
   Controller, Delete, Get, HttpCode, HttpStatus,
   Param, Query, UseGuards,
 } from '@nestjs/common';
+import { Transform } from 'class-transformer';
+import { IsDate, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { DepartmentScopeGuard } from '../../../common/guards/department-scope.guard';
 import { CurrentUser, CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
 import { ParseUuidOr400Pipe } from '../../../common/pipes/parse-uuid-or-400.pipe';
-import { ListMeetingsQueryDto, SearchMeetingsQueryDto } from '../application/dto/list-meetings-query.dto';
+import { ListMeetingsRequestDto, SearchMeetingsRequestDto } from '../application/dto/requestDto/ListMeetingsRequestDto';
 import { ListMeetingsHandler } from '../application/query/list-meetings.handler';
 import { GetMeetingDetailHandler } from '../application/query/get-meeting-detail.handler';
 import { GetTranscriptHandler } from '../application/query/get-transcript.handler';
 import { SearchMeetingsHandler } from '../application/query/search-meetings.handler';
 import { FullTextSearchHandler, FullTextSearchQuery } from '../application/query/full-text-search.handler';
 import { SoftDeleteMeetingHandler } from '../application/command/soft-delete-meeting.handler';
-import { Transform } from 'class-transformer';
-import { IsDate, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
+/** DTO nội bộ cho full-text-search — không cần tạo file riêng vì chỉ dùng ở controller này */
 class FullTextSearchQueryDto {
   @IsString()
   keyword: string;
@@ -60,26 +61,20 @@ export class MeetingsController {
   ) {}
 
   @Get()
-  list(@CurrentUser() user: CurrentUserPayload, @Query() query: ListMeetingsQueryDto) {
+  list(@CurrentUser() user: CurrentUserPayload, @Query() query: ListMeetingsRequestDto) {
     return this.listHandler.execute(user.departmentId, query);
   }
 
-  // ── Các route STATIC phải đứng TRƯỚC @Get(':id') ──
+  // ── Static routes TRƯỚC @Get(':id') ──
 
   @Get('search')
-  search(
-    @CurrentUser() user: CurrentUserPayload,
-    @Query() query: SearchMeetingsQueryDto,
-  ) {
+  search(@CurrentUser() user: CurrentUserPayload, @Query() query: SearchMeetingsRequestDto) {
     const deptScope = user.role === 'ADMIN' ? null : user.departmentId;
     return this.searchHandler.execute(query.keyword ?? '', deptScope, query);
   }
 
   @Get('full-text-search')
-  fullTextSearch(
-    @CurrentUser() user: CurrentUserPayload,
-    @Query() query: FullTextSearchQueryDto,
-  ) {
+  fullTextSearch(@CurrentUser() user: CurrentUserPayload, @Query() query: FullTextSearchQueryDto) {
     const deptScope = user.role === 'ADMIN' ? null : user.departmentId;
     const searchQuery: FullTextSearchQuery = {
       keyword: query.keyword,
@@ -92,7 +87,7 @@ export class MeetingsController {
     return this.fullTextSearchHandler.execute(searchQuery, deptScope);
   }
 
-  // ── Route DYNAMIC (:id) phải đứng SAU tất cả route static ──
+  // ── Dynamic routes ──
 
   @Get(':id')
   detail(@Param('id', ParseUuidOr400Pipe) id: string) {

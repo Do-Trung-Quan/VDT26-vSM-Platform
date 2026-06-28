@@ -5,8 +5,9 @@ import { IMeetingRepository } from '../../domain/ports/meeting.repository.port';
 import { MEETING_REPOSITORY } from '../../meetings.tokens';
 import { EVENT_PUBLISHER_PORT } from '../../../../shared/event-bus/event-bus.tokens';
 import { IEventPublisherPort } from '../../../../shared/event-bus/ports/event-publisher.port';
-import { CreateLiveMeetingDto } from '../dto/create-live-meeting.dto';
 import { CurrentUserPayload } from '../../../../common/decorators/current-user.decorator';
+import { CreateLiveMeetingRequestDto } from '../dto/requestDto/CreateLiveMeetingRequestDto';
+import { MeetingDetailResponseDto } from '../dto/responseDto/MeetingDetailResponseDto';
 
 @Injectable()
 export class CreateLiveMeetingHandler {
@@ -15,30 +16,34 @@ export class CreateLiveMeetingHandler {
     @Inject(EVENT_PUBLISHER_PORT) private readonly eventPublisher: IEventPublisherPort,
   ) {}
 
-  async execute(dto: CreateLiveMeetingDto, currentUser: CurrentUserPayload): Promise<Meeting> {
+  async execute(
+    dto: CreateLiveMeetingRequestDto,
+    currentUser: CurrentUserPayload,
+  ): Promise<MeetingDetailResponseDto> {
     const meeting = new Meeting();
-    meeting.title = dto.title;
+    meeting.title       = dto.title;
     meeting.description = dto.description ?? null;
-    meeting.type = MeetingType.LIVE;
-    meeting.hostId = currentUser.id;
-    // USER bị ép dept của mình; ADMIN có thể chọn
+    meeting.type        = MeetingType.LIVE;
+    meeting.hostId      = currentUser.id;
     meeting.departmentId =
       currentUser.role === 'ADMIN' && dto.departmentId
         ? dto.departmentId
         : currentUser.departmentId;
-    meeting.status = MeetingStatus.LIVE;
-    meeting.audioUrl = null;
+    meeting.status      = MeetingStatus.LIVE;
+    meeting.audioUrl    = null;
     meeting.durationSeconds = null;
-    meeting.isLocked = false;
-    meeting.deletedAt = null;
+    meeting.isLocked    = false;
+    meeting.deletedAt   = null;
 
-    meeting.startLive();
+    meeting.startLive(); // chỉ set status=LIVE, startedAt set ở Phase 6
+
     await this.meetingRepo.save(meeting);
 
     await this.eventPublisher.publish(
       new MeetingCreatedEvent(meeting.id, meeting.title, meeting.departmentId, meeting.hostId),
     );
 
-    return meeting;
+    const saved = await this.meetingRepo.findActiveById(meeting.id);
+    return MeetingDetailResponseDto.from(saved!);
   }
 }

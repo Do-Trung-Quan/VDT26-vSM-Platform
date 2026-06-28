@@ -2,8 +2,8 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query 
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { ParseUuidOr400Pipe } from '../../../common/pipes/parse-uuid-or-400.pipe';
 import { UserRole } from '../../users/domain/entities/user.entity';
-import { ListMeetingsQueryDto } from '../application/dto/list-meetings-query.dto';
-import { UpdateMeetingInfoDto } from '../application/dto/update-meeting-info.dto';
+import { ListMeetingsRequestDto } from '../application/dto/requestDto/ListMeetingsRequestDto';
+import { UpdateMeetingInfoRequestDto } from '../application/dto/requestDto/UpdateMeetingInfoRequestDto';
 import { ListAllMeetingsHandler } from '../application/query/list-all-meetings.handler';
 import { UpdateMeetingInfoHandler } from '../application/command/update-meeting-info.handler';
 import { RestoreMeetingHandler } from '../application/command/restore-meeting.handler';
@@ -20,22 +20,23 @@ export class AdminMeetingsController {
   ) {}
 
   @Get()
-  listAll(@Query() query: ListMeetingsQueryDto) {
+  listAll(@Query() query: ListMeetingsRequestDto) {
     return this.listAllHandler.execute(query);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUuidOr400Pipe) id: string,
-    @Body() dto: UpdateMeetingInfoDto,
+    @Body() dto: UpdateMeetingInfoRequestDto,
   ) {
     return this.updateInfoHandler.execute(id, dto);
   }
 
   @Post(':id/restore')
   @HttpCode(HttpStatus.OK)
-  restore(@Param('id', ParseUuidOr400Pipe) id: string) {
-    return this.restoreHandler.execute(id);
+  async restore(@Param('id', ParseUuidOr400Pipe) id: string) {
+    await this.restoreHandler.execute(id);
+    return { message: 'Khôi phục cuộc họp thành công' };
   }
 
   @Patch(':id/lock')

@@ -1,7 +1,8 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { Meeting, MeetingStatus } from '../../domain/entities/meeting.entity';
+import { MeetingStatus } from '../../domain/entities/meeting.entity';
 import { IMeetingRepository } from '../../domain/ports/meeting.repository.port';
 import { MEETING_REPOSITORY } from '../../meetings.tokens';
+import { MeetingUpdateResponseDto } from '../dto/responseDto/MeetingUpdateResponseDto';
 
 @Injectable()
 export class LockMeetingHandler {
@@ -9,7 +10,7 @@ export class LockMeetingHandler {
     @Inject(MEETING_REPOSITORY) private readonly meetingRepo: IMeetingRepository,
   ) {}
 
-  async execute(meetingId: string, isLocked: boolean): Promise<Meeting> {
+  async execute(meetingId: string, isLocked: boolean): Promise<MeetingUpdateResponseDto> {
     const meeting = await this.meetingRepo.findActiveById(meetingId);
     if (!meeting) throw new NotFoundException('Cuộc họp không tồn tại');
     if (meeting.status !== MeetingStatus.COMPLETED) {
@@ -18,6 +19,8 @@ export class LockMeetingHandler {
 
     isLocked ? meeting.lock() : meeting.unlock();
     await this.meetingRepo.save(meeting);
-    return meeting;
+
+    const updated = await this.meetingRepo.findActiveById(meetingId);
+    return MeetingUpdateResponseDto.from(updated!);
   }
 }

@@ -2,12 +2,8 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { IMeetingRepository } from '../../domain/ports/meeting.repository.port';
 import { IMeetingSummaryRepository } from '../../domain/ports/meeting-summary.repository.port';
 import { MEETING_REPOSITORY, MEETING_SUMMARY_REPOSITORY } from '../../meetings.tokens';
+import { SummaryResponseDto } from '../dto/responseDto/SummaryResponseDto';
 import { MeetingSummaryStatus } from '../../domain/entities/meeting-summary.entity';
-
-export interface SummaryResult {
-  status: MeetingSummaryStatus | 'NOT_STARTED';
-  summaryText: string | null;
-}
 
 @Injectable()
 export class GetSummaryHandler {
@@ -16,7 +12,7 @@ export class GetSummaryHandler {
     @Inject(MEETING_SUMMARY_REPOSITORY) private readonly summaryRepo: IMeetingSummaryRepository,
   ) {}
 
-  async execute(meetingId: string): Promise<SummaryResult> {
+  async execute(meetingId: string): Promise<SummaryResponseDto> {
     const meeting = await this.meetingRepo.findActiveById(meetingId);
     if (!meeting) throw new NotFoundException('Cuộc họp không tồn tại');
 
@@ -25,7 +21,7 @@ export class GetSummaryHandler {
 
     return {
       status: summary.status,
-      summaryText: summary.isCompleted() ? summary.summaryText : null,
+      summaryText: summary.status === MeetingSummaryStatus.COMPLETED ? summary.summaryText : null,
     };
   }
 }

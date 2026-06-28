@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsUUID } from 'class-validator';
 
-export class UpdateMeetingInfoDto {
+export class UpdateMeetingInfoRequestDto {
   @IsOptional()
   @IsString()
   title?: string;

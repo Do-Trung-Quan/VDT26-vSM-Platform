@@ -2,8 +2,8 @@ import { Body, Controller, HttpCode, HttpStatus, Post, UploadedFile, UseIntercep
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { CurrentUser, CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
-import { CreateLiveMeetingDto } from '../application/dto/create-live-meeting.dto';
-import { UploadAudioMeetingDto } from '../application/dto/upload-audio-meeting.dto';
+import { CreateLiveMeetingRequestDto } from '../application/dto/requestDto/CreateLiveMeetingRequestDto';
+import { UploadAudioMeetingRequestDto } from '../application/dto/requestDto/UploadAudioMeetingRequestDto';
 import { CreateLiveMeetingHandler } from '../application/command/create-live-meeting.handler';
 import { UploadAudioMeetingHandler } from '../application/command/upload-audio-meeting.handler';
 
@@ -17,7 +17,7 @@ export class LiveMeetingsController {
   @Post('live')
   @HttpCode(HttpStatus.CREATED)
   createLive(
-    @Body() dto: CreateLiveMeetingDto,
+    @Body() dto: CreateLiveMeetingRequestDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
     return this.createLiveHandler.execute(dto, user);
@@ -27,7 +27,7 @@ export class LiveMeetingsController {
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('audio_file', { storage: memoryStorage() }))
   upload(
-    @Body() dto: UploadAudioMeetingDto,
+    @Body() dto: UploadAudioMeetingRequestDto,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: CurrentUserPayload,
   ) {

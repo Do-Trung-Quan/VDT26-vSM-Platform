@@ -1,17 +1,10 @@
 import { Transform } from 'class-transformer';
 import { IsDate, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
-import { PaginationQueryDto } from '../../../../common/dto/pagination-query.dto';
-import { MeetingStatus } from '../../domain/entities/meeting.entity';
-import { DeletedStatusFilter } from '../../domain/ports/meeting.repository.port';
+import { PaginationQueryDto } from '../../../../../common/dto/pagination-query.dto';
+import { MeetingStatus } from '../../../domain/entities/meeting.entity';
+import { DeletedStatusFilter } from '../../../domain/ports/meeting.repository.port';
 
-/** DTO tìm kiếm theo title — keyword là bắt buộc */
-export class SearchMeetingsQueryDto extends PaginationQueryDto {
-  @IsOptional()
-  @IsString()
-  keyword?: string;
-}
-
-export class ListMeetingsQueryDto extends PaginationQueryDto {
+export class ListMeetingsRequestDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(MeetingStatus)
   status?: MeetingStatus;
@@ -30,8 +23,15 @@ export class ListMeetingsQueryDto extends PaginationQueryDto {
   @IsDate()
   toDate?: Date;
 
-  /** Chỉ dùng cho admin — lọc meetings theo trạng thái xóa mềm */
+  /** Chỉ dùng cho admin: 'all' | 'active' | 'deleted' */
   @IsOptional()
   @IsIn(['all', 'active', 'deleted'] satisfies DeletedStatusFilter[])
   deletedStatus?: DeletedStatusFilter;
+}
+
+/** DTO tìm kiếm theo title */
+export class SearchMeetingsRequestDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  keyword?: string;
 }

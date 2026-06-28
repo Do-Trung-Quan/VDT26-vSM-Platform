@@ -12,7 +12,8 @@ import { EVENT_PUBLISHER_PORT } from '../../../../shared/event-bus/event-bus.tok
 import { IEventPublisherPort } from '../../../../shared/event-bus/ports/event-publisher.port';
 import { QUEUE_NAMES, JOB_NAMES } from '../../../../queue/queue.constants';
 import { CurrentUserPayload } from '../../../../common/decorators/current-user.decorator';
-import { UploadAudioMeetingDto } from '../dto/upload-audio-meeting.dto';
+import { UploadAudioMeetingRequestDto } from '../dto/requestDto/UploadAudioMeetingRequestDto';
+import { MeetingDetailResponseDto } from '../dto/responseDto/MeetingDetailResponseDto';
 
 @Injectable()
 export class UploadAudioMeetingHandler {
@@ -24,34 +25,32 @@ export class UploadAudioMeetingHandler {
   ) {}
 
   async execute(
-    dto: UploadAudioMeetingDto,
+    dto: UploadAudioMeetingRequestDto,
     file: Express.Multer.File,
     currentUser: CurrentUserPayload,
-  ): Promise<Meeting> {
+  ): Promise<MeetingDetailResponseDto> {
     const meeting = new Meeting();
-    meeting.title = dto.title;
+    meeting.title       = dto.title;
     meeting.description = dto.description ?? null;
-    meeting.type = MeetingType.UPLOAD;
-    meeting.hostId = currentUser.id;
+    meeting.type        = MeetingType.UPLOAD;
+    meeting.hostId      = currentUser.id;
     meeting.departmentId =
       currentUser.role === 'ADMIN' && dto.departmentId
         ? dto.departmentId
         : currentUser.departmentId;
-    meeting.status = MeetingStatus.PROCESSING;
-    meeting.isLocked = false;
+    meeting.status    = MeetingStatus.PROCESSING;
+    meeting.isLocked  = false;
     meeting.deletedAt = null;
 
     meeting.markProcessing();
 
-    // Upload file audio lên MinIO, lưu key (không lưu URL đầy đủ)
-    const ext = extname(file.originalname) || '.wav';
+    const ext      = extname(file.originalname) || '.wav';
     const audioKey = `audio/${Date.now()}-${meeting.id}${ext}`;
     await this.objectStorage.upload(file.buffer, audioKey, file.mimetype);
     meeting.audioUrl = audioKey;
 
     await this.meetingRepo.save(meeting);
 
-    // Push job BullMQ — BatchTranscriptionProcessor xử lý ở Phase 6
     await this.transcriptionQueue.add(JOB_NAMES.BATCH_TRANSCRIBE_MEETING, {
       meetingId: meeting.id,
       audioKey,
@@ -61,6 +60,7 @@ export class UploadAudioMeetingHandler {
       new MeetingCreatedEvent(meeting.id, meeting.title, meeting.departmentId, meeting.hostId),
     );
 
-    return meeting;
+    const saved = await this.meetingRepo.findActiveById(meeting.id);
+    return MeetingDetailResponseDto.from(saved!);
   }
 }

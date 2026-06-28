@@ -10,35 +10,25 @@ export class SummaryController {
 
   @Post(':id/summary')
   @HttpCode(HttpStatus.ACCEPTED)
-  async triggerSummary(
-    @Param('id', ParseUuidOr400Pipe) id: string,
-  ): Promise<{ message: string }> {
-    // Phase 7 — AI summary chưa được tích hợp
+  async triggerSummary(@Param('id', ParseUuidOr400Pipe) id: string): Promise<{ message: string }> {
     return { message: 'Tính năng tóm tắt AI sẽ ra mắt trong bản cập nhật tiếp theo' };
   }
 
   @Get(':id/summary')
-  async getSummary(
-    @Param('id', ParseUuidOr400Pipe) id: string,
-    @Res() res: Response,
-  ): Promise<void> {
+  async getSummary(@Param('id', ParseUuidOr400Pipe) id: string, @Res() res: Response): Promise<void> {
     const result = await this.getSummaryHandler.execute(id);
 
     if (result.status === 'NOT_STARTED' || result.status === MeetingSummaryStatus.PROCESSING) {
       res.status(HttpStatus.ACCEPTED).json({
-        statusCode: 202,
-        message: 'Tóm tắt đang được xử lý',
-        data: { status: result.status },
-        meta: null,
+        statusCode: 202, message: 'Tóm tắt đang được xử lý',
+        data: { status: result.status }, meta: null,
       });
       return;
     }
 
     res.status(HttpStatus.OK).json({
-      statusCode: 200,
-      message: 'Success',
-      data: { status: result.status, summaryText: result.summaryText },
-      meta: null,
+      statusCode: 200, message: 'Success',
+      data: { status: result.status, summaryText: result.summaryText }, meta: null,
     });
   }
 }

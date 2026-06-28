@@ -79,12 +79,17 @@ export class Meeting extends AggregateRootBase {
 
   startLive(): void {
     this.status = MeetingStatus.LIVE;
+    // startedAt được set khi recording thật sự bắt đầu (Phase 6 - WebSocket open_session)
+  }
+
+  /** Gọi bởi Phase 6 LiveSessionService khi WebSocket open_session nhận được audio đầu tiên */
+  beginRecording(): void {
     this.startedAt = new Date();
   }
 
   markProcessing(): void {
     this.status = MeetingStatus.PROCESSING;
-    this.startedAt = this.startedAt ?? new Date();
+    // startedAt sẽ được set bởi BatchTranscriptionProcessor khi xử lý audio (Phase 6)
   }
 
   complete(audioUrl: string, durationSeconds: number): void {
