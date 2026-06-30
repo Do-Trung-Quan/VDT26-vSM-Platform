@@ -1,1 +1,9 @@
-// Input WS: meeting_id, JWT token
+import { IsString, IsUUID } from 'class-validator';
+
+export class WsOpenSessionDto {
+  @IsUUID()
+  meetingId: string;
+
+  @IsString()
+  token: string;
+}

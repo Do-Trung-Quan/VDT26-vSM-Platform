@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { QueueModule } from './queue/queue.module';
@@ -20,6 +21,7 @@ import { TransformResponseInterceptor } from './common/interceptors/transform-re
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     AppConfigModule,
     DatabaseModule,
     QueueModule,
@@ -35,6 +37,7 @@ import { TransformResponseInterceptor } from './common/interceptors/transform-re
     DashboardModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

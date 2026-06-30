@@ -25,4 +25,6 @@ export interface IMeetingRepository {
   listByDepartment(deptId: string, options: ListMeetingsOptions): Promise<PaginatedMeetings>;
   listAll(options: ListMeetingsOptions): Promise<PaginatedMeetings>;
   searchByTitle(keyword: string, departmentId: string | null, page: number, limit: number): Promise<PaginatedMeetings>;
+  /** Đếm số meeting không bị xóa theo status — dùng để kiểm tra ngưỡng live đồng thời. */
+  countActiveByStatus(status: MeetingStatus): Promise<number>;
 }

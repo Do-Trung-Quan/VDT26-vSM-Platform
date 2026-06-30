@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Meeting } from '../../domain/entities/meeting.entity';
 import {
   IMeetingRepository,
@@ -74,6 +74,12 @@ export class MeetingRepository implements IMeetingRepository {
 
     const [items, total] = await qb.getManyAndCount();
     return { items, total };
+  }
+
+  async countActiveByStatus(status: import('../../domain/entities/meeting.entity').MeetingStatus): Promise<number> {
+    return this.repo.count({
+      where: { status, deletedAt: IsNull() },
+    });
   }
 
   private buildListQuery(options: ListMeetingsOptions) {
