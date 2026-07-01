@@ -51,6 +51,7 @@ export default function MeetingsPage() {
   const [meta, setMeta] = useState({ total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
 
   // --- Dialogs ---
   const [formOpen, setFormOpen] = useState(false);
@@ -88,7 +89,7 @@ export default function MeetingsPage() {
   // Reset page khi thay filter (ngoại trừ page)
   useEffect(() => { setPage(1); }, [statusFilter, deletedStatus, departmentId, dateRange, titleSearch]);
 
-  // Fetch departments — không điều kiện isAdmin (catch xử lý 403 nếu user thường)
+  // Fetch departments
   const fetchDepartments = useCallback(async () => {
     try {
       const { data } = await departmentsApi.list({ status: "active", limit: 100 });
@@ -98,20 +99,58 @@ export default function MeetingsPage() {
 
   useEffect(() => { fetchDepartments(); }, [fetchDepartments]);
 
+  // Poll upload progress for PROCESSING meetings (every 1s, auto-refresh khi 100%)
+  useEffect(() => {
+    const processingIds = meetings
+      .filter(m => m.status === "PROCESSING" && !m.deletedAt)
+      .map(m => m.id);
+
+    if (processingIds.length === 0) {
+      setProgressMap({});
+      return;
+    }
+
+    let refreshScheduled = false;
+
+    const poll = async () => {
+      const results = await Promise.all(
+        processingIds.map(id =>
+          meetingsApi.getUploadProgress(id)
+            .then(r => ({ id, percent: r.data?.percent ?? 0 }))
+            .catch(() => null),
+        ),
+      );
+      setProgressMap(prev => {
+        const next = { ...prev };
+        results.forEach(r => { if (r) next[r.id] = r.percent; });
+        return next;
+      });
+      // Khi có meeting đạt 100%, re-fetch danh sách để cập nhật status sang COMPLETED
+      if (!refreshScheduled && results.some(r => r && r.percent >= 100)) {
+        refreshScheduled = true;
+        setTimeout(() => fetchMeetings(), 1500);
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 1000);
+    return () => clearInterval(interval);
+  }, [meetings, fetchMeetings]);
+
   // --- Actions ---
   const handleDelete = async (id: string) => {
-    try { await meetingsApi.softDelete(id); fetchMeetings(); } catch { /* lỗi hiện trong toast Phase sau */ }
+    try { await meetingsApi.softDelete(id); fetchMeetings(); } catch {}
   };
 
   const handleRestore = async (id: string) => {
-    try { await meetingsApi.restore(id); fetchMeetings(); } catch { /* lỗi hiện trong toast Phase sau */ }
+    try { await meetingsApi.restore(id); fetchMeetings(); } catch {}
   };
 
   const handleToggleLock = async (m: MeetingListItem) => {
-    try { await meetingsApi.setLocked(m.id, !m.isLocked); fetchMeetings(); } catch { /* */ }
+    try { await meetingsApi.setLocked(m.id, !m.isLocked); fetchMeetings(); } catch {}
   };
 
-  // Client-side filter theo title (filter nhanh, không cần thêm API call)
+  // Client-side filter theo title
   const filtered = meetings.filter(m =>
     !titleSearch || m.title.toLowerCase().includes(titleSearch.toLowerCase())
   );
@@ -139,13 +178,11 @@ export default function MeetingsPage() {
     </button>
   );
 
-  // Quyết định actions cho từng meeting
   const getMenuActions = (m: MeetingListItem) => {
     const isDeleted = !!m.deletedAt;
     const isHost = m.hostId === user?.id;
 
     if (isDeleted) {
-      // Chỉ admin mới thấy nút Khôi phục
       return isAdmin ? ["restore"] : [];
     }
 
@@ -197,7 +234,6 @@ export default function MeetingsPage() {
 
         <DateRangePicker value={dateRange} onChange={setDateRange} />
 
-        {/* Admin-only filters */}
         {isAdmin && (
           <>
             <Select value={departmentId} onValueChange={setDepartmentId}>
@@ -226,7 +262,7 @@ export default function MeetingsPage() {
         {/* Header row */}
         <div
           className="grid gap-3 px-[18px] py-3.5 border-b border-line bg-surface/60 text-[12px] font-bold text-tx-dark uppercase tracking-wide"
-          style={{ gridTemplateColumns: "1fr 130px 96px 160px 160px 130px 44px" }}>
+          style={{ gridTemplateColumns: "1fr 150px 96px 160px 160px 130px 44px" }}>
           <div>Cuộc họp</div><div>Trạng thái</div><div>Loại</div>
           <div>Host</div><div>Phòng ban</div><div>Thời gian tạo</div><div />
         </div>
@@ -249,6 +285,8 @@ export default function MeetingsPage() {
           const isDeleted = !!m.deletedAt;
           const canOpen = m.status === "COMPLETED" && !isDeleted;
           const menuActions = getMenuActions(m);
+          const pct = progressMap[m.id];
+          const showPct = m.status === "PROCESSING" && !isDeleted && pct !== undefined && pct >= 0;
 
           return (
             <div key={m.id}
@@ -258,7 +296,7 @@ export default function MeetingsPage() {
                 canOpen && "cursor-pointer",
                 isDeleted && "bg-[#FAFAFA]",
               )}
-              style={{ gridTemplateColumns: "1fr 130px 96px 160px 160px 130px 44px" }}>
+              style={{ gridTemplateColumns: "1fr 150px 96px 160px 160px 130px 44px" }}>
 
               {/* Title + lock icon */}
               <div className="flex items-center gap-2 min-w-0">
@@ -278,7 +316,7 @@ export default function MeetingsPage() {
                 ) : (
                   <Badge variant={variant} className="text-[11px]">
                     <span className={cn("w-1.5 h-1.5 rounded-full flex-none", dot)} />
-                    {statusLabel}
+                    {statusLabel}{showPct ? ` · ${pct}%` : ""}
                   </Badge>
                 )}
               </div>
@@ -293,7 +331,7 @@ export default function MeetingsPage() {
                 {new Date(m.createdAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
               </div>
 
-              {/* 3-dot menu — chỉ hiện khi có action */}
+              {/* 3-dot menu */}
               <div className="flex justify-center" onClick={e => e.stopPropagation()}>
                 {menuActions.length > 0 && (
                   <DropdownMenu>

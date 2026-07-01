@@ -53,6 +53,11 @@ export class LiveSessionService {
       throw new ConflictException('Cuộc họp không ở trạng thái LIVE');
     }
 
+    if (!meeting.startedAt) {
+      meeting.beginRecording();
+      await this.meetingRepo.save(meeting);
+    }
+
     // Khởi tạo các resource
     this.audioStorage.initStream(meetingId);
     await this.buffer.allocate(meetingId);

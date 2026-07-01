@@ -49,6 +49,7 @@ export interface MeetingListItem {
 export interface MeetingDetail extends MeetingListItem {
   audioUrl: string | null;
   durationSeconds: number | null;
+  hostAvatarUrl: string;
 }
 
 /** Sync với backend TranscriptBlockResponseDto */

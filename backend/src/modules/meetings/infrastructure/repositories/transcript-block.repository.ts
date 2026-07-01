@@ -23,7 +23,7 @@ export class TranscriptBlockRepository implements ITranscriptBlockRepository {
     return this.repo
       .createQueryBuilder('tb')
       .where('tb.meeting_id = :meetingId', { meetingId })
-      .orderBy('tb.sequenceNumber', 'ASC')
+      .orderBy('tb.startTime', 'ASC')
       .getMany();
   }
 
@@ -38,7 +38,7 @@ export class TranscriptBlockRepository implements ITranscriptBlockRepository {
       .where('tb.text ILIKE :kw', { kw: `%${keyword}%` })
       .andWhere('m.deleted_at IS NULL')
       .orderBy('m.createdAt', 'DESC')
-      .addOrderBy('tb.sequenceNumber', 'ASC')
+      .addOrderBy('tb.startTime', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
 

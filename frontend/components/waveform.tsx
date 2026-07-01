@@ -5,14 +5,16 @@ import { cn } from "@/lib/utils";
 interface WaveformProps {
   active?: boolean;
   playedRatio?: number;
+  bars?: number[];
   className?: string;
 }
 
-export function Waveform({ active = true, playedRatio = 0, className }: WaveformProps) {
+export function Waveform({ active = true, playedRatio = 0, bars, className }: WaveformProps) {
+  const data = bars ?? WAVE_BARS;
   return (
     <div className={cn("flex items-center gap-[2px] h-full", className)}>
-      {WAVE_BARS.map((v, i) => {
-        const isPlayed = i / WAVE_BARS.length < playedRatio;
+      {data.map((v, i) => {
+        const isPlayed = i / data.length < playedRatio;
         return (
           <div
             key={i}
@@ -25,7 +27,7 @@ export function Waveform({ active = true, playedRatio = 0, className }: Waveform
               background: active
                 ? "#EE0033"
                 : isPlayed
-                ? "#2D6CDF"
+                ? "#EE0033"
                 : "#D4D8DF",
               animationDelay: active ? `${i * 0.04}s` : "0s",
             }}

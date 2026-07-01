@@ -20,7 +20,8 @@ import { SpeakerDiarizationService } from '../application/streaming/speaker-diar
 import { SessionTimeoutPayload } from '../application/listeners/live-session-timeout.listener';
 import { Inject } from '@nestjs/common';
 import { ITranscriptBlockRepository } from '../domain/ports/transcript-block.repository.port';
-import { TRANSCRIPT_BLOCK_REPOSITORY } from '../meetings.tokens';
+import { ITranscriptBufferPort } from '../domain/ports/transcript-buffer.port';
+import { TRANSCRIPT_BLOCK_REPOSITORY, TRANSCRIPT_BUFFER_PORT } from '../meetings.tokens';
 
 /** Metadata gắn vào socket khi open_session thành công. */
 interface SessionMeta {
@@ -28,7 +29,7 @@ interface SessionMeta {
   userId: string;
 }
 
-@WebSocketGateway({ cors: { origin: '*' }, namespace: '/live' })
+@WebSocketGateway({ cors: { origin: '*' }, namespace: '/live', pingInterval: 2000, pingTimeout: 3000, })
 @Injectable()
 export class TranscriptionGateway implements OnGatewayDisconnect {
   @WebSocketServer() server: Server;
@@ -47,6 +48,7 @@ export class TranscriptionGateway implements OnGatewayDisconnect {
     private readonly reconnectSvc: ReconnectService,
     private readonly diarizationSvc: SpeakerDiarizationService,
     @Inject(TRANSCRIPT_BLOCK_REPOSITORY) private readonly transcriptRepo: ITranscriptBlockRepository,
+    @Inject(TRANSCRIPT_BUFFER_PORT) private readonly buffer: ITranscriptBufferPort,
     @InjectQueue(QUEUE_NAMES.LIVE_SESSION_TIMEOUT) private readonly timeoutQueue: Queue,
   ) {
     this.resumeTtlSeconds = cfg.get<number>('transcription.liveResumeTtlSeconds') ?? 120;
@@ -121,10 +123,10 @@ export class TranscriptionGateway implements OnGatewayDisconnect {
     const meta = this.socketSessions.get(client.id);
     if (!meta || meta.meetingId !== data.meetingId) return;
 
-    // Cập nhật DB cho các block đã lưu
-    await this.transcriptRepo.updateSpeakerLabelFrom(
+    // Cập nhật các block đang nằm trong Redis buffer (chưa lưu xuống DB)
+    await this.buffer.updateSpeakerLabel(
       data.meetingId,
-      data.fromSequence,
+      data.oldLabel,
       data.newLabel,
     );
 

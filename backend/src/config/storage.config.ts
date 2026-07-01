@@ -8,4 +8,6 @@ export default registerAs('storage', () => ({
   secretKey: process.env.STORAGE_SECRET_KEY,
   bucket: process.env.STORAGE_BUCKET,
   region: process.env.STORAGE_REGION ?? 'us-east-1',
+  /** URL công khai để browser truy cập MinIO trực tiếp (presigned PUT/GET) */
+  publicUrl: process.env.STORAGE_PUBLIC_URL,
 }));

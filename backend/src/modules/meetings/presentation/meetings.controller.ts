@@ -14,6 +14,7 @@ import { GetTranscriptHandler } from '../application/query/get-transcript.handle
 import { SearchMeetingsHandler } from '../application/query/search-meetings.handler';
 import { FullTextSearchHandler, FullTextSearchQuery } from '../application/query/full-text-search.handler';
 import { SoftDeleteMeetingHandler } from '../application/command/soft-delete-meeting.handler';
+import { GetUploadProgressHandler } from '../application/query/get-upload-progress.handler';
 
 /** DTO nội bộ cho full-text-search — không cần tạo file riêng vì chỉ dùng ở controller này */
 class FullTextSearchQueryDto {
@@ -58,6 +59,7 @@ export class MeetingsController {
     private readonly searchHandler: SearchMeetingsHandler,
     private readonly fullTextSearchHandler: FullTextSearchHandler,
     private readonly softDeleteHandler: SoftDeleteMeetingHandler,
+    private readonly uploadProgressHandler: GetUploadProgressHandler,
   ) {}
 
   @Get()
@@ -97,6 +99,11 @@ export class MeetingsController {
   @Get(':id/transcript')
   transcript(@Param('id', ParseUuidOr400Pipe) id: string) {
     return this.transcriptHandler.execute(id);
+  }
+
+  @Get(':id/upload-progress')
+  uploadProgress(@Param('id', ParseUuidOr400Pipe) id: string) {
+    return this.uploadProgressHandler.execute(id);
   }
 
   @Delete(':id')

@@ -4,9 +4,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { types } from 'pg';
 import { SnakeCaseNamingStrategy } from './strategies/snake-naming.strategy';
 
-// Fix timezone: pg driver parses "timestamp without time zone" as LOCAL time by default.
-// Appending 'Z' forces UTC interpretation globally — affects all @CreateDateColumn / @UpdateDateColumn.
-types.setTypeParser(1114, (val: string) => new Date(val + 'Z'));
+// Đã đồng bộ timezone về Asia/Ho_Chi_Minh ở cả Backend và Database Docker,
+// do đó không cần ép parse 'Z' (UTC) cho cột timestamp nữa.
+// types.setTypeParser(1114, (val: string) => new Date(val + 'Z'));
 
 @Module({
   imports: [

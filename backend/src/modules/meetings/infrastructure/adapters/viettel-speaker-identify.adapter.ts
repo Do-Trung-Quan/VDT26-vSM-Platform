@@ -22,12 +22,12 @@ export class ViettelSpeakerIdentifyAdapter implements ISpeakerEmbeddingPort {
     this.browserSampleRate = cfg.get<number>('transcription.browserSampleRate') ?? 48000;
   }
 
-  async batchGetEmbeddings(segments: Buffer[]): Promise<(number[] | null)[]> {
+  async batchGetEmbeddings(segments: Buffer[], sampleRateHz?: number): Promise<(number[] | null)[]> {
     if (segments.length === 0) return [];
 
     const form = new FormData();
     for (let i = 0; i < segments.length; i++) {
-      const wav = await AudioConverter.toWav16k(segments[i], this.browserSampleRate);
+      const wav = await AudioConverter.toWav16k(segments[i], sampleRateHz ?? this.browserSampleRate);
       form.append('files', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), `file_${i + 1}.wav`);
     }
 

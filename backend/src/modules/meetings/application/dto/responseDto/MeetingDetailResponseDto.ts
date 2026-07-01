@@ -9,6 +9,7 @@ export class MeetingDetailResponseDto {
   status: MeetingStatus;
   hostId: string;
   hostName: string;
+  hostAvatarUrl: string;
   departmentId: string;
   departmentName: string;
   audioUrl: string | null;
@@ -18,7 +19,11 @@ export class MeetingDetailResponseDto {
   endedAt: string | null;
   createdAt: string;
 
-  static from(m: Meeting, signedAudioUrl: string | null = null): MeetingDetailResponseDto {
+  static from(
+    m: Meeting,
+    signedAudioUrl: string | null = null,
+    signedHostAvatarUrl: string | null = null,
+  ): MeetingDetailResponseDto {
     const dto = new MeetingDetailResponseDto();
     dto.id             = m.id;
     dto.title          = m.title;
@@ -27,6 +32,7 @@ export class MeetingDetailResponseDto {
     dto.status         = m.status;
     dto.hostId         = m.hostId;
     dto.hostName       = m.host?.fullName ?? '';
+    dto.hostAvatarUrl  = signedHostAvatarUrl ?? m.host?.avatarUrl ?? '';
     dto.departmentId   = m.departmentId;
     dto.departmentName = m.department?.name ?? '';
     dto.audioUrl       = signedAudioUrl;

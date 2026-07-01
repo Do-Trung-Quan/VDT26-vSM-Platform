@@ -4,5 +4,5 @@
  * Kết quả dùng để so sánh cosine similarity → phân định người nói (SpeakerDiarizationService).
  */
 export interface ISpeakerEmbeddingPort {
-  batchGetEmbeddings(segments: Buffer[]): Promise<(number[] | null)[]>;
+  batchGetEmbeddings(segments: Buffer[], sampleRateHz?: number): Promise<(number[] | null)[]>;
 }

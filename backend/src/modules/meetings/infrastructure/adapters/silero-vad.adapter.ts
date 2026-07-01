@@ -33,8 +33,24 @@ export class SileroVadAdapter implements IVadPort {
     const browserSampleRate = cfg.get<number>('transcription.browserSampleRate') ?? 48000;
     const samplesPerFrame = Math.floor((browserSampleRate * FRAME_MS) / 1000);
 
-    this.bytesPerFrame = samplesPerFrame * 2;                  // 16-bit = 2 bytes/sample
-    this.silenceThreshold = Math.ceil(silenceMs / FRAME_MS);      // 600ms / 30ms = 20 frames
+    this.bytesPerFrame = samplesPerFrame * 2;
+    this.silenceThreshold = Math.ceil(silenceMs / FRAME_MS);
+  }
+
+  /** Khởi tạo session với sample rate tùy chỉnh (batch upload dùng 16000). */
+  initSession(sessionId: string, sampleRateHz: number): void {
+    const samplesPerFrame = Math.floor((sampleRateHz * FRAME_MS) / 1000);
+    const silenceMs = this.cfg.get<number>('transcription.vadSilenceThresholdMs') ?? 500;
+    this.sessions.set(sessionId, {
+      residual: Buffer.alloc(0),
+      utterancePcm: [],
+      silenceFrames: 0,
+      isSpeaking: false,
+      utteranceStart: 0,
+      totalFrames: 0,
+      silenceThreshold: Math.ceil(silenceMs / FRAME_MS),
+      bytesPerFrame: samplesPerFrame * 2,
+    });
   }
 
   async feed(sessionId: string, pcmChunk: Buffer): Promise<AudioSegment[]> {

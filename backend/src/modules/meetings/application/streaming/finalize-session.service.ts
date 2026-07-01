@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { promises as fsPromises } from 'fs';
 import { ILocalAudioStoragePort } from '../../domain/ports/local-audio-storage.port';
 import { ITranscriptBufferPort } from '../../domain/ports/transcript-buffer.port';
@@ -17,6 +18,7 @@ import {
 import { EVENT_PUBLISHER_PORT } from '../../../../shared/event-bus/event-bus.tokens';
 import { TranscriptionService } from './transcription.service';
 import { LiveSessionService } from './live-session.service';
+import { AudioConverter } from '../../infrastructure/audio/audio-converter';
 
 @Injectable()
 export class FinalizeSessionService {
@@ -30,6 +32,7 @@ export class FinalizeSessionService {
     @Inject(EVENT_PUBLISHER_PORT) private readonly eventBus: IEventPublisherPort,
     private readonly transcriptionSvc: TranscriptionService,
     private readonly liveSessionSvc: LiveSessionService,
+    private readonly cfg: ConfigService,
   ) { }
 
   async finalize(meetingId: string, userId: string): Promise<void> {
@@ -61,14 +64,16 @@ export class FinalizeSessionService {
       this.logger.log(`Saved ${blocks.length} transcript blocks for ${meetingId}`);
     }
 
-    // 4. Upload file audio lên MinIO
-    const audioKey = `audio/${meetingId}.pcm`;
+    // 4. Convert raw PCM to WAV 16kHz so browser can play it, and upload to MinIO
+    const browserSampleRate = this.cfg.get<number>('transcription.browserSampleRate') ?? 48000;
+    const audioKey = `audio/${meetingId}.wav`;
     let audioUrl = audioKey;
     try {
       const fileData = await fsPromises.readFile(tempPath);
-      await this.objectStorage.upload(fileData, audioKey, 'audio/x-raw');
+      const wavBuffer = await AudioConverter.toWav16k(fileData, browserSampleRate);
+      await this.objectStorage.upload(wavBuffer, audioKey, 'audio/wav');
       audioUrl = audioKey;
-      this.logger.log(`Audio uploaded: ${audioKey}`);
+      this.logger.log(`Audio converted to WAV and uploaded: ${audioKey}`);
     } catch (err) {
       this.logger.error(`Audio upload failed for ${meetingId}: ${err}`);
     }

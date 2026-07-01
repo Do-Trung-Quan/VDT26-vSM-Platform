@@ -46,4 +46,27 @@ export class RedisTranscriptBufferAdapter implements ITranscriptBufferPort {
   async isResumable(meetingId: string): Promise<boolean> {
     return (await this.redis.exists(RESUME_KEY(meetingId))) === 1;
   }
+
+  async updateSpeakerLabel(meetingId: string, oldLabel: string, newLabel: string): Promise<void> {
+    const raw = await this.redis.lrange(BUFFER_KEY(meetingId), 0, -1);
+    if (raw.length === 0) return;
+
+    const blocks = raw.map(s => JSON.parse(s) as TranscriptBlock);
+    let modified = false;
+
+    const updatedRaw = blocks.map(b => {
+      if (b.speakerLabel === oldLabel) {
+        b.speakerLabel = newLabel;
+        modified = true;
+      }
+      return JSON.stringify(b);
+    });
+
+    if (modified) {
+      const pipeline = this.redis.pipeline();
+      pipeline.del(BUFFER_KEY(meetingId));
+      pipeline.rpush(BUFFER_KEY(meetingId), ...updatedRaw);
+      await pipeline.exec();
+    }
+  }
 }

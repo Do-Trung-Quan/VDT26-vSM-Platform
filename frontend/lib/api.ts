@@ -15,6 +15,44 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function performRefresh(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const refreshToken = localStorage.getItem("refresh_token");
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (res.ok) {
+      const text = await res.text();
+      const body = text ? JSON.parse(text) : {};
+      const data = body.data;
+      if (data && data.accessToken) {
+        localStorage.setItem("access_token", data.accessToken);
+        localStorage.setItem("refresh_token", data.refreshToken);
+        document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
+        return data.accessToken;
+      }
+    }
+  } catch (err) {
+    console.error("Token refresh error:", err);
+  }
+  return null;
+}
+
+async function getRefreshedToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = performRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -46,8 +84,14 @@ async function apiFetch<T>(
 
       // Không redirect khi đổi mật khẩu — 401 = sai mật khẩu hiện tại (expected error)
       const isPasswordChangePath = path === "/users/me/password";
+      const isRefreshPath = path === "/auth/refresh";
 
-      if (!isPublicPath && !isPasswordChangePath) {
+      if (!isPublicPath && !isPasswordChangePath && !isRefreshPath) {
+        const newToken = await getRefreshedToken();
+        if (newToken) {
+          return apiFetch<T>(path, options);
+        }
+
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("auth_user");

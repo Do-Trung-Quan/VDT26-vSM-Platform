@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { extname } from 'path';
+import { randomUUID } from 'crypto';
 import { Meeting, MeetingStatus, MeetingType } from '../../domain/entities/meeting.entity';
 import { MeetingCreatedEvent } from '../../domain/events/meeting-created.event';
 import { IMeetingRepository } from '../../domain/ports/meeting.repository.port';
@@ -30,6 +31,7 @@ export class UploadAudioMeetingHandler {
     currentUser: CurrentUserPayload,
   ): Promise<MeetingDetailResponseDto> {
     const meeting = new Meeting();
+    meeting.id          = randomUUID(); // pre-assign để dùng trong audioKey trước khi save
     meeting.title       = dto.title;
     meeting.description = dto.description ?? null;
     meeting.type        = MeetingType.UPLOAD;
@@ -38,15 +40,17 @@ export class UploadAudioMeetingHandler {
       currentUser.role === 'ADMIN' && dto.departmentId
         ? dto.departmentId
         : currentUser.departmentId;
-    meeting.status    = MeetingStatus.PROCESSING;
     meeting.isLocked  = false;
     meeting.deletedAt = null;
+    meeting.markProcessing(); // sets status = PROCESSING
+    if (dto.startedAt) {
+      meeting.startedAt = new Date(dto.startedAt);
+    }
 
-    meeting.markProcessing();
-
-    const ext      = extname(file.originalname) || '.wav';
-    const audioKey = `audio/${Date.now()}-${meeting.id}${ext}`;
-    await this.objectStorage.upload(file.buffer, audioKey, file.mimetype);
+    const ext      = (extname(file.originalname) || '.bin').toLowerCase();
+    const audioKey = `audio/${meeting.id}${ext}`;
+    const contentType = file.mimetype || 'audio/octet-stream';
+    await this.objectStorage.upload(file.buffer, audioKey, contentType);
     meeting.audioUrl = audioKey;
 
     await this.meetingRepo.save(meeting);

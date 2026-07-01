@@ -21,6 +21,10 @@ export class GetMeetingDetailHandler {
       ? await this.objectStorage.getSignedUrl(extractStorageKey(meeting.audioUrl), 3 * 3600)
       : null;
 
-    return MeetingDetailResponseDto.from(meeting, signedAudioUrl);
+    const signedHostAvatarUrl = meeting.host?.avatarUrl
+      ? await this.objectStorage.getSignedUrl(extractStorageKey(meeting.host.avatarUrl))
+      : null;
+
+    return MeetingDetailResponseDto.from(meeting, signedAudioUrl, signedHostAvatarUrl);
   }
 }

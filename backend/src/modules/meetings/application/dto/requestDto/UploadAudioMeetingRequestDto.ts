@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsDateString, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class UploadAudioMeetingRequestDto {
   @IsString()
@@ -13,5 +13,10 @@ export class UploadAudioMeetingRequestDto {
   @IsOptional()
   @IsUUID()
   departmentId?: string;
+
+  /** Thời điểm bắt đầu cuộc họp — do FE gửi lên từ date/time picker của form upload */
+  @IsOptional()
+  @IsDateString()
+  startedAt?: string;
   // audio_file nhận qua @UploadedFile() trong controller
 }

@@ -17,4 +17,6 @@ export interface ITranscriptBufferPort {
   clearResumeTtl(meetingId: string): Promise<void>;
   /** Kiểm tra session vẫn trong cửa sổ resume. */
   isResumable(meetingId: string): Promise<boolean>;
+  /** Cập nhật nhãn người nói cho các block trong buffer. */
+  updateSpeakerLabel(meetingId: string, oldLabel: string, newLabel: string): Promise<void>;
 }

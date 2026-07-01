@@ -41,6 +41,9 @@ import { LiveSessionService } from './application/streaming/live-session.service
 import { ReconnectService } from './application/streaming/reconnect.service';
 import { FinalizeSessionService } from './application/streaming/finalize-session.service';
 
+// Batch Worker
+import { BatchTranscriptionProcessor } from './application/workers/batch-transcription.processor';
+
 // Listeners
 import { LiveSessionTimeoutListener } from './application/listeners/live-session-timeout.listener';
 import { MeetingEventsListener } from './application/listeners/meeting-events.listener';
@@ -48,6 +51,8 @@ import { MeetingEventsListener } from './application/listeners/meeting-events.li
 // Command Handlers
 import { CreateLiveMeetingHandler } from './application/command/create-live-meeting.handler';
 import { UploadAudioMeetingHandler } from './application/command/upload-audio-meeting.handler';
+import { InitUploadAudioHandler } from './application/command/init-upload-audio.handler';
+import { CompleteUploadAudioHandler } from './application/command/complete-upload-audio.handler';
 import { SoftDeleteMeetingHandler } from './application/command/soft-delete-meeting.handler';
 import { RestoreMeetingHandler } from './application/command/restore-meeting.handler';
 import { UpdateMeetingInfoHandler } from './application/command/update-meeting-info.handler';
@@ -62,6 +67,7 @@ import { GetTranscriptHandler } from './application/query/get-transcript.handler
 import { SearchMeetingsHandler } from './application/query/search-meetings.handler';
 import { GetSummaryHandler } from './application/query/get-summary.handler';
 import { FullTextSearchHandler } from './application/query/full-text-search.handler';
+import { GetUploadProgressHandler } from './application/query/get-upload-progress.handler';
 
 // Controllers & Gateway
 import { MeetingsController } from './presentation/meetings.controller';
@@ -120,6 +126,9 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
     ReconnectService,
     FinalizeSessionService,
 
+    // ── Workers ───────────────────────────────────────────────────────────────
+    BatchTranscriptionProcessor,
+
     // ── Listeners ─────────────────────────────────────────────────────────────
     LiveSessionTimeoutListener,
     MeetingEventsListener,
@@ -127,6 +136,8 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
     // ── Command Handlers ──────────────────────────────────────────────────────
     CreateLiveMeetingHandler,
     UploadAudioMeetingHandler,
+    InitUploadAudioHandler,
+    CompleteUploadAudioHandler,
     SoftDeleteMeetingHandler,
     RestoreMeetingHandler,
     UpdateMeetingInfoHandler,
@@ -141,6 +152,7 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
     SearchMeetingsHandler,
     GetSummaryHandler,
     FullTextSearchHandler,
+    GetUploadProgressHandler,
 
     // ── Audio Converter (khởi tạo ffmpeg path 1 lần khi module start) ────────
     AudioConverterInitializer,

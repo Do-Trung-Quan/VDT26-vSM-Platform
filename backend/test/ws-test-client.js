@@ -43,7 +43,7 @@ const fs = require('fs');
 // ── Cấu hình ──────────────────────────────────────────────────────────────
 const SERVER_URL = 'http://localhost:3001';
 const ACCESS_TOKEN = process.env.TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmYzhmNDljZS1jYzZkLTRkMmItOThiYi1iZjFhZWRiNzc4NjkiLCJyb2xlIjoiQURNSU4iLCJkZXBhcnRtZW50SWQiOiIzZjYzNzljMi04YjY4LTQ4M2EtYjA4NC01M2MyZWUzMzZhZmMiLCJpYXQiOjE3ODI3NDE5MjUsImV4cCI6MTc4Mjc0MjgyNX0.ZvkQ3jxcVQ1qNNWtrZVBS_wO56gf89tSjoWgTnnp5Qk';
-const MEETING_ID = process.env.MEETING_ID || 'c0c4aee7-35a3-4364-8bda-ff3d873644e0';
+const MEETING_ID = process.env.MEETING_ID || 'c701374f-f1dd-43e8-b5e0-1936917bfb0e';
 const WAV_FILE = process.env.WAV_FILE || 'C:\\VDT\\Project\\mockup audio\\Khắp xung quanh.wav';
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'C:\\ffmpeg\\bin\\ffmpeg.exe';
 

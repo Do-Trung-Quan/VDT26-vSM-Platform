@@ -30,13 +30,13 @@ export class ViettelSpeechToTextAdapter implements ISpeechToTextPort {
     this.browserSampleRate = cfg.get<number>('transcription.browserSampleRate') ?? 48000;
   }
 
-  async batchTranscribe(segments: Buffer[]): Promise<string[]> {
+  async batchTranscribe(segments: Buffer[], sampleRateHz?: number): Promise<string[]> {
     if (segments.length === 0) return [];
 
     // Node.js 22 global FormData + Blob — không cần import thêm
     const form = new FormData();
     for (let i = 0; i < segments.length; i++) {
-      const wav = await AudioConverter.toWav16k(segments[i], this.browserSampleRate);
+      const wav = await AudioConverter.toWav16k(segments[i], sampleRateHz ?? this.browserSampleRate);
       form.append('files', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), `file_${i + 1}.wav`);
     }
 

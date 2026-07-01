@@ -11,8 +11,8 @@ interface DiarizationSession {
   nextSpeakerIndex: number;
 }
 
-const SIMILARITY_ASSIGN = 0.55; // ngưỡng nhận cùng người nói
-const SIMILARITY_MERGE = 0.65; // ngưỡng gộp 2 centroid trùng lặp
+const SIMILARITY_ASSIGN = 0.40; // ngưỡng nhận cùng người nói
+const SIMILARITY_MERGE = 0.50; // ngưỡng gộp 2 centroid trùng lặp
 
 @Injectable()
 export class SpeakerDiarizationService {

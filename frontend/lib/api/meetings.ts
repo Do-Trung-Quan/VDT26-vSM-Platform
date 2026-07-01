@@ -61,8 +61,23 @@ export const meetingsApi = {
   createLive: (body: { title: string; description?: string; departmentId?: string }) =>
     api.post<MeetingDetail>("/meetings/live", body),
 
+  /** Legacy: direct multipart upload (dùng cho test script, không qua presigned URL) */
   uploadAudio: (form: FormData) =>
     api.postForm<MeetingDetail>("/meetings/upload", form),
+
+  /** Bước 1: khởi tạo meeting + lấy presigned PUT URL cho MinIO */
+  uploadAudioInit: (body: {
+    title: string;
+    description?: string;
+    departmentId?: string;
+    startedAt?: string;
+    filename: string;
+    filesize?: number;
+  }) => api.post<{ meetingId: string; presignedUrl: string }>("/meetings/upload/init", body),
+
+  /** Bước 3: thông báo upload xong, backend đẩy job BullMQ */
+  uploadAudioComplete: (meetingId: string) =>
+    api.post<MeetingDetail>("/meetings/upload/complete", { meetingId }),
 
   softDelete: (id: string) =>
     api.delete<null>(`/meetings/${id}`),
@@ -75,4 +90,9 @@ export const meetingsApi = {
 
   setLocked: (id: string, isLocked: boolean) =>
     api.patch<MeetingUpdateResponse>(`/admin/meetings/${id}/lock`, { isLocked }),
+
+  getUploadProgress: (id: string) =>
+    api.get<{ status: string; percent: number; stage: string; totalSegments: number; processedSegments: number }>(
+      `/meetings/${id}/upload-progress`,
+    ),
 };
