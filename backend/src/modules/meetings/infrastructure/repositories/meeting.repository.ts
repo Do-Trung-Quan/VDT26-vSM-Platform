@@ -55,25 +55,25 @@ export class MeetingRepository implements IMeetingRepository {
   async searchByTitle(
     keyword: string,
     departmentId: string | null,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedMeetings> {
+  ): Promise<Meeting[]> {
     const qb = this.repo
       .createQueryBuilder('m')
       .leftJoinAndSelect('m.host', 'host')
       .leftJoinAndSelect('m.department', 'dept')
-      .where('m.deleted_at IS NULL')
-      .andWhere('m.title ILIKE :kw', { kw: `%${keyword}%` })
-      .orderBy('m.createdAt', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+      .addSelect(
+        `CASE WHEN "m"."status" = 'LIVE' THEN 1 WHEN "m"."status" = 'PROCESSING' THEN 2 ELSE 3 END`,
+        'status_sort',
+      )
+      .orderBy('status_sort', 'ASC')
+      .addOrderBy('m.createdAt', 'DESC')
+      .where('m.title ILIKE :kw', { kw: `%${keyword}%` });
 
     if (departmentId) {
       qb.andWhere('m.department_id = :deptId', { deptId: departmentId });
+      qb.andWhere('m.deleted_at IS NULL');
     }
 
-    const [items, total] = await qb.getManyAndCount();
-    return { items, total };
+    return qb.getMany();
   }
 
   async countActiveByStatus(status: import('../../domain/entities/meeting.entity').MeetingStatus): Promise<number> {

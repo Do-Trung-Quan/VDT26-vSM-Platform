@@ -45,6 +45,10 @@ export const envValidationSchema = Joi.object({
   OTP_TTL_MINUTES: Joi.number().default(10),
   OTP_COOLDOWN_SECONDS: Joi.number().default(60),
 
+  LLM_PROVIDER: Joi.string().optional(),
+  LLM_API_KEY:  Joi.string().optional(),
+  LLM_MODEL:    Joi.string().optional(),
+
   LIVE_RESUME_TTL_SECONDS: Joi.number().default(120),
   LIVE_MAX_CONCURRENT_SESSIONS: Joi.number().default(20),
   AI_MAX_CONCURRENCY: Joi.number().default(5),

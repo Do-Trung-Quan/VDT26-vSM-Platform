@@ -40,6 +40,7 @@ export default function MeetingsPage() {
 
   // --- Filters ---
   const [titleSearch, setTitleSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MeetingStatus | "ALL">("ALL");
   const [deletedStatus, setDeletedStatus] = useState<"all" | "active" | "deleted">("active");
   const [departmentId, setDepartmentId] = useState("all");
@@ -48,6 +49,7 @@ export default function MeetingsPage() {
 
   // --- Data ---
   const [meetings, setMeetings] = useState<MeetingListItem[]>([]);
+  const [allSearchResults, setAllSearchResults] = useState<MeetingListItem[]>([]);
   const [meta, setMeta] = useState({ total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -63,31 +65,93 @@ export default function MeetingsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      const params = {
-        page,
-        limit: 20,
-        status: statusFilter !== "ALL" ? statusFilter : undefined,
-        departmentId: departmentId !== "all" ? departmentId : undefined,
-        fromDate: dateRange.from?.toISOString(),
-        toDate: dateRange.to?.toISOString(),
-        deletedStatus: isAdmin ? deletedStatus : undefined,
-      };
-      const { data, meta: m } = isAdmin
-        ? await meetingsApi.listAll(params)
-        : await meetingsApi.list(params);
-      setMeetings(data ?? []);
-      setMeta({ total: m?.total ?? 0, totalPages: m?.totalPages ?? 1 });
+      if (debouncedSearch.trim()) {
+        const { data } = await meetingsApi.search(debouncedSearch.trim());
+        setAllSearchResults(data ?? []);
+      } else {
+        const params = {
+          page,
+          limit: 20,
+          status: statusFilter !== "ALL" ? statusFilter : undefined,
+          departmentId: departmentId !== "all" ? departmentId : undefined,
+          fromDate: dateRange.from?.toISOString(),
+          toDate: dateRange.to?.toISOString(),
+          deletedStatus: isAdmin ? deletedStatus : undefined,
+        };
+        const { data, meta: m } = isAdmin
+          ? await meetingsApi.listAll(params)
+          : await meetingsApi.list(params);
+        setMeetings(data ?? []);
+        setMeta({ total: Number(m?.total) || 0, totalPages: Number(m?.totalPages) || 1 });
+      }
     } catch {
-      setMeetings([]);
+      if (debouncedSearch.trim()) {
+        setAllSearchResults([]);
+      } else {
+        setMeetings([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [user, isAdmin, page, statusFilter, deletedStatus, departmentId, dateRange]);
+  }, [user, isAdmin, page, statusFilter, deletedStatus, departmentId, dateRange, debouncedSearch]);
+
+  // Debounce titleSearch 400ms trước khi gọi API
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(titleSearch), 400);
+    return () => clearTimeout(timer);
+  }, [titleSearch]);
 
   useEffect(() => { fetchMeetings(); }, [fetchMeetings]);
 
+  // --- Client-side filtering & pagination for search results ---
+  useEffect(() => {
+    if (!debouncedSearch.trim()) return;
+
+    let filtered = [...allSearchResults];
+
+    // 1. Filter by status
+    if (statusFilter !== "ALL") {
+      filtered = filtered.filter(m => m.status === statusFilter);
+    }
+
+    // 2. Filter by department
+    if (departmentId !== "all") {
+      filtered = filtered.filter(m => m.departmentId === departmentId);
+    }
+
+    // 3. Filter by date range
+    if (dateRange.from) {
+      const fromTime = new Date(dateRange.from).getTime();
+      filtered = filtered.filter(m => new Date(m.createdAt).getTime() >= fromTime);
+    }
+    if (dateRange.to) {
+      const toTime = new Date(dateRange.to).getTime();
+      filtered = filtered.filter(m => new Date(m.createdAt).getTime() <= toTime);
+    }
+
+    // 4. Filter by deleted status
+    if (isAdmin) {
+      if (deletedStatus === "active") {
+        filtered = filtered.filter(m => !m.deletedAt);
+      } else if (deletedStatus === "deleted") {
+        filtered = filtered.filter(m => !!m.deletedAt);
+      }
+    } else {
+      filtered = filtered.filter(m => !m.deletedAt);
+    }
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / 20) || 1;
+
+    // Slice for pagination (20 items per page)
+    const paginated = filtered.slice((page - 1) * 20, page * 20);
+
+    setMeetings(paginated);
+    setMeta({ total, totalPages });
+  }, [allSearchResults, page, statusFilter, deletedStatus, departmentId, dateRange, debouncedSearch, isAdmin]);
+
   // Reset page khi thay filter (ngoại trừ page)
-  useEffect(() => { setPage(1); }, [statusFilter, deletedStatus, departmentId, dateRange, titleSearch]);
+  useEffect(() => { setPage(1); }, [statusFilter, deletedStatus, departmentId, dateRange, debouncedSearch]);
 
   // Fetch departments
   const fetchDepartments = useCallback(async () => {
@@ -150,11 +214,6 @@ export default function MeetingsPage() {
     try { await meetingsApi.setLocked(m.id, !m.isLocked); fetchMeetings(); } catch {}
   };
 
-  // Client-side filter theo title
-  const filtered = meetings.filter(m =>
-    !titleSearch || m.title.toLowerCase().includes(titleSearch.toLowerCase())
-  );
-
   // --- Render helpers ---
   const filterPill = (label: string, active: boolean, onClick: () => void) => (
     <button key={label} onClick={onClick}
@@ -205,7 +264,7 @@ export default function MeetingsPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-tx-muted" />
           <Input
             className="pl-9"
-            placeholder="Lọc nhanh theo tên…"
+            placeholder="Tìm kiếm theo tên cuộc họp…"
             value={titleSearch}
             onChange={e => setTitleSearch(e.target.value)}
           />
@@ -274,13 +333,13 @@ export default function MeetingsPage() {
           </div>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {!loading && meetings.length === 0 && (
           <div className="text-center py-16 text-[13px] text-tx-muted">
             Không có cuộc họp nào
           </div>
         )}
 
-        {!loading && filtered.map(m => {
+        {!loading && meetings.map(m => {
           const { variant, dot, label: statusLabel } = STATUS_BADGE[m.status];
           const isDeleted = !!m.deletedAt;
           const canOpen = m.status === "COMPLETED" && !isDeleted;

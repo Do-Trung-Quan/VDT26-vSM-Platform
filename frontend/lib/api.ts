@@ -108,6 +108,22 @@ async function apiFetch<T>(
   return { data: body.data as T, meta: body.meta ?? null };
 }
 
+/** Download file nhị phân (PDF…) — trả về Blob với auth header */
+export async function downloadBlob(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`/api${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(`Download thất bại: ${res.status}`);
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get:      <T>(path: string)                  => apiFetch<T>(path),
   post:     <T>(path: string, body?: unknown)  => apiFetch<T>(path, { method: "POST",   body: JSON.stringify(body) }),

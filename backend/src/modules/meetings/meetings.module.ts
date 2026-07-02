@@ -18,6 +18,8 @@ import {
   LOCAL_AUDIO_STORAGE_PORT,
   TRANSCRIPT_BUFFER_PORT,
   LIVE_SESSION_REGISTRY_PORT,
+  PDF_EXPORTER_PORT,
+  LLM_PORT,
 } from './meetings.tokens';
 
 // Repositories
@@ -41,14 +43,20 @@ import { LiveSessionService } from './application/streaming/live-session.service
 import { ReconnectService } from './application/streaming/reconnect.service';
 import { FinalizeSessionService } from './application/streaming/finalize-session.service';
 
+// Adapters (Phase 7)
+import { PdfKitExporterAdapter } from './infrastructure/adapters/pdfkit-exporter.adapter';
+import { GeminiLlmAdapter } from './infrastructure/adapters/gemini-llm.adapter';
+
 // Batch Worker
 import { BatchTranscriptionProcessor } from './application/workers/batch-transcription.processor';
+import { SummaryGenerationProcessor } from './application/workers/summary-generation.processor';
 
 // Listeners
 import { LiveSessionTimeoutListener } from './application/listeners/live-session-timeout.listener';
 import { MeetingEventsListener } from './application/listeners/meeting-events.listener';
 
 // Command Handlers
+import { GenerateSummaryHandler } from './application/command/generate-summary.handler';
 import { CreateLiveMeetingHandler } from './application/command/create-live-meeting.handler';
 import { UploadAudioMeetingHandler } from './application/command/upload-audio-meeting.handler';
 import { InitUploadAudioHandler } from './application/command/init-upload-audio.handler';
@@ -68,6 +76,7 @@ import { SearchMeetingsHandler } from './application/query/search-meetings.handl
 import { GetSummaryHandler } from './application/query/get-summary.handler';
 import { FullTextSearchHandler } from './application/query/full-text-search.handler';
 import { GetUploadProgressHandler } from './application/query/get-upload-progress.handler';
+import { ExportPdfHandler } from './application/query/export-pdf.handler';
 
 // Controllers & Gateway
 import { MeetingsController } from './presentation/meetings.controller';
@@ -94,6 +103,7 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
       { name: QUEUE_NAMES.TRANSCRIPTION_BATCH },
       { name: QUEUE_NAMES.LIVE_SESSION_TIMEOUT },
       { name: QUEUE_NAMES.DOMAIN_EVENTS },
+      { name: QUEUE_NAMES.SUMMARY_GENERATION },
     ),
     // JwtModule để gateway verify token thủ công
     JwtModule.registerAsync({
@@ -110,6 +120,10 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
     { provide: MEETING_REPOSITORY,          useClass: MeetingRepository },
     { provide: TRANSCRIPT_BLOCK_REPOSITORY, useClass: TranscriptBlockRepository },
     { provide: MEETING_SUMMARY_REPOSITORY,  useClass: MeetingSummaryRepository },
+
+    // ── Phase 7 Adapters ──────────────────────────────────────────────────────
+    { provide: PDF_EXPORTER_PORT,           useClass: PdfKitExporterAdapter },
+    { provide: LLM_PORT,                    useClass: GeminiLlmAdapter },
 
     // ── Phase 6 Adapters ──────────────────────────────────────────────────────
     { provide: VAD_PORT,                    useClass: SileroVadAdapter },
@@ -128,12 +142,14 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
 
     // ── Workers ───────────────────────────────────────────────────────────────
     BatchTranscriptionProcessor,
+    SummaryGenerationProcessor,
 
     // ── Listeners ─────────────────────────────────────────────────────────────
     LiveSessionTimeoutListener,
     MeetingEventsListener,
 
     // ── Command Handlers ──────────────────────────────────────────────────────
+    GenerateSummaryHandler,
     CreateLiveMeetingHandler,
     UploadAudioMeetingHandler,
     InitUploadAudioHandler,
@@ -153,6 +169,7 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
     GetSummaryHandler,
     FullTextSearchHandler,
     GetUploadProgressHandler,
+    ExportPdfHandler,
 
     // ── Audio Converter (khởi tạo ffmpeg path 1 lần khi module start) ────────
     AudioConverterInitializer,

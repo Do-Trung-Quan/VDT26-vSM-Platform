@@ -12,3 +12,4 @@ export const LIVE_SESSION_REGISTRY_PORT   = Symbol('LIVE_SESSION_REGISTRY_PORT')
 
 // Phase 7
 export const PDF_EXPORTER_PORT            = Symbol('PDF_EXPORTER_PORT');
+export const LLM_PORT                     = Symbol('LLM_PORT');

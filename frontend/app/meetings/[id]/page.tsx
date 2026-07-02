@@ -13,7 +13,7 @@ import { Waveform } from "@/components/waveform";
 import { MeetingEditDialog } from "@/components/meeting-edit-dialog";
 import { useAuth } from "@/lib/auth-context";
 import { meetingsApi } from "@/lib/api/meetings";
-import { getAvatarColor } from "@/lib/types";
+import { downloadBlob } from "@/lib/api";
 import type { MeetingDetail, TranscriptBlock, MeetingSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +72,7 @@ export default function MeetingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Audio player
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -146,6 +147,11 @@ export default function MeetingDetailPage() {
       setMeeting(m ?? null);
       setTranscript(t ?? []);
       setSummary(s ?? null);
+      // Auto-trigger AI summary cho meeting COMPLETED chưa có tóm tắt
+      if (m?.status === "COMPLETED" && (!s || s.status === "NOT_STARTED")) {
+        meetingsApi.triggerSummary(m.id).catch(() => {});
+        setSummary({ status: "PROCESSING", summaryText: "" } as any);
+      }
     } catch {
       router.push("/meetings");
     } finally {
@@ -155,10 +161,34 @@ export default function MeetingDetailPage() {
 
   useEffect(() => { fetchAll(false); }, [params.id]);
 
+  // Poll summary mỗi 3s khi đang PROCESSING
+  useEffect(() => {
+    if (summary?.status !== "PROCESSING") return;
+    const interval = setInterval(async () => {
+      const { data: s } = await meetingsApi.getSummary(params.id)
+        .catch(() => ({ data: null, meta: null }));
+      if (s) setSummary(s);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [summary?.status, params.id]);
+
   const handleToggleLock = async () => {
     if (!meeting) return;
     await meetingsApi.setLocked(meeting.id, !meeting.isLocked);
     fetchAll(true);
+  };
+
+  const handleExportPdf = async () => {
+    if (!meeting) return;
+    setPdfLoading(true);
+    try {
+      await downloadBlob(
+        `/meetings/${meeting.id}/export/pdf`,
+        `bien-ban-${meeting.title.replace(/\s+/g, "-")}.pdf`,
+      );
+    } catch { /* ignore */ } finally {
+      setPdfLoading(false);
+    }
   };
 
   // Build stable speaker map
@@ -375,7 +405,7 @@ export default function MeetingDetailPage() {
               ) : (
                 <div
                   className="w-[34px] h-[34px] rounded-full text-white flex items-center justify-center font-semibold text-[13px] flex-none"
-                  style={{ background: getAvatarColor(meeting.hostId) }}
+                  style={{ background: "#EE0033" }}
                 >
                   {getInitials(meeting.hostName)}
                 </div>
@@ -427,8 +457,15 @@ export default function MeetingDetailPage() {
 
           {/* 3 nút — đậm màu */}
           <div className="flex flex-col gap-2.5 mt-4">
-            <Button className="w-full gap-2" disabled>
-              <FileText size={15} /> Xuất PDF
+            <Button
+              className="w-full gap-2"
+              disabled={pdfLoading || meeting.status !== "COMPLETED"}
+              onClick={handleExportPdf}
+            >
+              {pdfLoading
+                ? <><Loader2 size={15} className="animate-spin" /> Đang xuất…</>
+                : <><FileText size={15} /> Xuất PDF</>
+              }
             </Button>
             {isAdmin && (
               <>

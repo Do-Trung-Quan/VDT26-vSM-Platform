@@ -30,7 +30,7 @@ export class ListMeetingsRequestDto extends PaginationQueryDto {
 }
 
 /** DTO tìm kiếm theo title */
-export class SearchMeetingsRequestDto extends PaginationQueryDto {
+export class SearchMeetingsRequestDto {
   @IsOptional()
   @IsString()
   keyword?: string;

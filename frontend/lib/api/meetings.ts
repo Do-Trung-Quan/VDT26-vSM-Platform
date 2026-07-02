@@ -79,6 +79,16 @@ export const meetingsApi = {
   uploadAudioComplete: (meetingId: string) =>
     api.post<MeetingDetail>("/meetings/upload/complete", { meetingId }),
 
+  /** Trigger tóm tắt AI — idempotent */
+  triggerSummary: (id: string) =>
+    api.post<{ message: string }>(`/meetings/${id}/summary`),
+
+  search: (keyword: string) => {
+    const qs = new URLSearchParams();
+    qs.set("keyword", keyword);
+    return api.get<MeetingListItem[]>(`/meetings/search?${qs.toString()}`);
+  },
+
   softDelete: (id: string) =>
     api.delete<null>(`/meetings/${id}`),
 

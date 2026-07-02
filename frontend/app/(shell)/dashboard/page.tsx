@@ -56,7 +56,7 @@ function TrendChart() {
 const total = HEADCOUNT.reduce((s,h)=>s+h.count,0);
 function buildDonut(){
   let pct = 0;
-  return HEADCOUNT.map(h=>{ const deg=(h.count/total)*360; const s=pct; pct+=deg; return {color:h.color,from:s,to:pct,...h}; });
+  return HEADCOUNT.map(h=>{ const deg=(h.count/total)*360; const s=pct; pct+=deg; return {...h,from:s,to:pct}; });
 }
 
 export default function DashboardPage() {
